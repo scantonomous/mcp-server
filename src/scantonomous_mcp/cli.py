@@ -9,12 +9,12 @@ import sys
 
 import click
 
-from .auth import AuthManager
+from .auth import AuthManager, get_default_client_id
 
 
 @click.group()
 @click.option("--stage", default="dev", help="Deployment stage (dev, beta, prod).")
-@click.option("--client-id", envvar="SCANTONOMOUS_MCP_CLIENT_ID", help="Cognito MCP Client ID.")
+@click.option("--client-id", envvar="SCANTONOMOUS_MCP_CLIENT_ID", help="Cognito MCP Client ID (auto-detected per stage if omitted).")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging.")
 @click.pass_context
 def main(ctx: click.Context, stage: str, client_id: str | None, verbose: bool) -> None:
@@ -122,9 +122,15 @@ def init(ctx: click.Context, is_global: bool) -> None:
             config = json.load(f)
 
     mcp_servers = config.setdefault("mcpServers", {})
+    args = ["--stage", stage]
+    # Only include --client-id if it was explicitly provided (not the built-in default)
+    explicit_client_id = ctx.obj.get("client_id")
+    if explicit_client_id:
+        args.extend(["--client-id", explicit_client_id])
+    args.append("serve")
     mcp_servers["scantonomous"] = {
         "command": "scantonomous-mcp",
-        "args": ["--stage", stage, "--client-id", client_id, "serve"],
+        "args": args,
     }
 
     with open(config_path, "w") as f:
@@ -139,11 +145,14 @@ def init(ctx: click.Context, is_global: bool) -> None:
 
 
 def _require_client_id(ctx: click.Context) -> str:
-    """Get client_id from context, error if missing."""
+    """Get client_id from explicit flag, env var, or built-in stage default."""
     client_id = ctx.obj.get("client_id")
     if not client_id:
+        client_id = get_default_client_id(ctx.obj["stage"])
+    if not client_id:
         click.echo(
-            "Error: --client-id or SCANTONOMOUS_MCP_CLIENT_ID is required.",
+            f"Error: No client ID configured for stage '{ctx.obj['stage']}'. "
+            "Pass --client-id or set SCANTONOMOUS_MCP_CLIENT_ID.",
             err=True,
         )
         sys.exit(1)

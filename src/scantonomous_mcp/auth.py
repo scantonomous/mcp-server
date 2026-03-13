@@ -30,21 +30,30 @@ CALLBACK_PORTS = [19827, 19828, 19829]
 
 STAGE_CONFIGS: dict[str, dict[str, str]] = {
     "dev": {
+        "client_id": "41o0m0h3sk9akaj1q0sqeq2di6",
         "cognito_domain": "scntnms-dev.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://dev.scntnms.services/v1",
         "web_domain": "web.dev.scntnms.services",
     },
     "beta": {
+        "client_id": "",  # Set after beta deploy
         "cognito_domain": "scntnms-beta.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://beta.scntnms.services/v1",
         "web_domain": "web.beta.scntnms.services",
     },
     "prod": {
+        "client_id": "",  # Set after prod deploy
         "cognito_domain": "scntnms-prod.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://scntnms.services/v1",
         "web_domain": "web.scntnms.services",
     },
 }
+
+
+def get_default_client_id(stage: str) -> str | None:
+    """Return the built-in client ID for a stage, or None if not configured."""
+    client_id = STAGE_CONFIGS.get(stage, {}).get("client_id", "")
+    return client_id if client_id else None
 
 
 @dataclass
