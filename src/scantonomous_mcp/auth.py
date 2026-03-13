@@ -1,13 +1,16 @@
-"""Token relay auth flow with keychain token storage.
+"""OAuth 2.0 Authorization Code + PKCE auth flow with keychain token storage.
 
 The MCP server authenticates by opening the user's browser to the productweb
-consent page. After the user approves, productweb relays its Amplify session
-tokens (access, ID, refresh) to a localhost callback via a hidden form POST.
+consent page, which redirects to Cognito /oauth2/authorize. Cognito issues an
+authorization code to the localhost callback. The MCP server exchanges the code
+for tokens using the Cognito /oauth2/token endpoint with PKCE verification.
 The refresh token is stored in the system keychain for future sessions.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import http.server
 import json
 import logging
@@ -61,6 +64,17 @@ def get_default_client_id(stage: str) -> str | None:
     return client_id if client_id else None
 
 
+def _generate_pkce() -> tuple[str, str]:
+    """Generate PKCE code_verifier and code_challenge (S256).
+
+    :returns: (code_verifier, code_challenge) tuple.
+    """
+    code_verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return code_verifier, code_challenge
+
+
 @dataclass
 class TokenSet:
     """Token set with expiry tracking."""
@@ -68,15 +82,15 @@ class TokenSet:
     access_token: str
     id_token: str
     refresh_token: str | None
-    token_client_id: str | None  # Cognito client ID that issued the tokens
     expires_at: float  # epoch seconds
 
 
 class AuthManager:
-    """Manages token relay auth flow.
+    """Manages OAuth 2.0 Authorization Code + PKCE auth flow.
 
-    Opens the browser to the productweb consent page, receives relayed Amplify
-    tokens via localhost POST callback, and handles automatic token refresh.
+    Opens the browser to the productweb consent page, which redirects to
+    Cognito /oauth2/authorize. Cognito issues an auth code to the localhost
+    callback. The code is exchanged for tokens via the /oauth2/token endpoint.
     """
 
     def __init__(
@@ -108,17 +122,15 @@ class AuthManager:
 
         # Try refresh from keychain
         refresh_token = self._tokens.refresh_token if self._tokens else None
-        token_client_id = self._tokens.token_client_id if self._tokens else None
 
         if not refresh_token:
             stored = self._load_keychain_config()
             if stored:
                 refresh_token = stored.get("refresh_token")
-                token_client_id = stored.get("token_client_id")
 
-        if refresh_token and token_client_id:
+        if refresh_token:
             try:
-                self._tokens = self._refresh_tokens(refresh_token, token_client_id)
+                self._tokens = self._refresh_tokens(refresh_token)
                 return self._tokens.access_token
             except AuthError:
                 logger.info("Refresh token expired, re-auth required")
@@ -136,8 +148,9 @@ class AuthManager:
         raise AuthError("Not authenticated")
 
     def login(self) -> None:
-        """Run the browser-based token relay login flow."""
+        """Run the browser-based OAuth 2.0 Authorization Code + PKCE login flow."""
         state = secrets.token_urlsafe(32)
+        code_verifier, code_challenge = _generate_pkce()
 
         # Find an available port
         server = None
@@ -158,42 +171,47 @@ class AuthManager:
 
         redirect_uri = f"http://localhost:{port}/callback"
 
-        # Build the authorize URL — goes to productweb consent page
+        # Build the authorize URL — goes to productweb consent page, which
+        # redirects to Cognito /oauth2/authorize after user approval.
         auth_params = urllib.parse.urlencode({
+            "client_id": self.client_id,
             "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid profile",
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
         })
         authorize_url = f"https://{self.web_domain}/authorize?{auth_params}"
 
         logger.info("Opening browser for authorization...")
         webbrowser.open(authorize_url)
 
-        # Wait for the callback (GET redirect with tokens from productweb).
+        # Wait for the callback (GET redirect with auth code from Cognito).
         # 5 minutes to allow time for login + consent.
         server.timeout = 300
         server.handle_request()
 
-        if not server.access_token:
-            raise AuthError(
-                server.auth_error or "Authorization timed out. Please try again."
-            )
+        if server.auth_error:
+            raise AuthError(f"Authorization denied: {server.auth_error}")
+
+        if not server.auth_code:
+            raise AuthError("Authorization timed out. Please try again.")
 
         if server.callback_state != state:
             raise AuthError("State mismatch -- possible CSRF attack. Aborting.")
 
-        self._tokens = TokenSet(
-            access_token=server.access_token,
-            id_token=server.id_token or "",
-            refresh_token=server.refresh_token,
-            token_client_id=server.token_client_id,
-            expires_at=time.time() + 900,  # Productweb tokens: ~15 min
+        # Exchange auth code for tokens via Cognito /oauth2/token
+        self._tokens = self._exchange_code(
+            code=server.auth_code,
+            redirect_uri=redirect_uri,
+            code_verifier=code_verifier,
         )
 
-        # Store refresh token and config in keychain
+        # Store refresh token in keychain
         if self._tokens.refresh_token:
             config_data = json.dumps({
                 "refresh_token": self._tokens.refresh_token,
-                "token_client_id": self._tokens.token_client_id,
                 "stage": self.stage,
             })
             keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
@@ -224,25 +242,54 @@ class AuthManager:
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def _refresh_tokens(self, refresh_token: str, token_client_id: str) -> TokenSet:
-        """Refresh tokens using Cognito InitiateAuth API.
+    def _exchange_code(
+        self, code: str, redirect_uri: str, code_verifier: str
+    ) -> TokenSet:
+        """Exchange authorization code for tokens via Cognito /oauth2/token.
 
-        The refresh token was issued by Amplify (SRP flow), so we use the
-        Cognito service API rather than the hosted UI /oauth2/token endpoint.
+        :param code: Authorization code from Cognito callback.
+        :param redirect_uri: The redirect_uri used in the authorize request.
+        :param code_verifier: PKCE code_verifier for proof.
+        :returns: TokenSet with access, ID, and refresh tokens.
+        :raises AuthError: If the token exchange fails.
         """
         resp = self._http.post(
-            f"https://cognito-idp.{self.region}.amazonaws.com/",
-            json={
-                "AuthFlow": "REFRESH_TOKEN_AUTH",
-                "ClientId": token_client_id,
-                "AuthParameters": {
-                    "REFRESH_TOKEN": refresh_token,
-                },
+            f"https://{self.cognito_domain}/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": self.client_id,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
             },
-            headers={
-                "Content-Type": "application/x-amz-json-1.1",
-                "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if resp.status_code != 200:
+            raise AuthError(f"Token exchange failed: {resp.text}")
+
+        data = resp.json()
+        return TokenSet(
+            access_token=data["access_token"],
+            id_token=data["id_token"],
+            refresh_token=data.get("refresh_token"),
+            expires_at=time.time() + data.get("expires_in", 3600),
+        )
+
+    def _refresh_tokens(self, refresh_token: str) -> TokenSet:
+        """Refresh tokens using Cognito /oauth2/token endpoint.
+
+        :param refresh_token: The stored refresh token.
+        :returns: New TokenSet with refreshed access and ID tokens.
+        :raises AuthError: If the refresh fails (token expired).
+        """
+        resp = self._http.post(
+            f"https://{self.cognito_domain}/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": self.client_id,
+                "refresh_token": refresh_token,
             },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         if resp.status_code != 200:
             # Clear invalid config
@@ -253,13 +300,11 @@ class AuthManager:
             raise AuthError("Refresh token expired. Please re-authenticate.")
 
         data = resp.json()
-        result = data.get("AuthenticationResult", {})
         return TokenSet(
-            access_token=result["AccessToken"],
-            id_token=result["IdToken"],
-            refresh_token=refresh_token,
-            token_client_id=token_client_id,
-            expires_at=time.time() + result.get("ExpiresIn", 900),
+            access_token=data["access_token"],
+            id_token=data["id_token"],
+            refresh_token=refresh_token,  # Cognito doesn't return a new refresh token
+            expires_at=time.time() + data.get("expires_in", 3600),
         )
 
 
@@ -268,12 +313,12 @@ class AuthError(Exception):
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-    """HTTP handler for the token relay callback."""
+    """HTTP handler for the OAuth callback — receives auth code from Cognito."""
 
     server: _CallbackServer  # type: ignore[assignment]
 
     def do_GET(self) -> None:
-        """Handle GET — receives redirected tokens or deny/error."""
+        """Handle GET — receives authorization code or error from Cognito."""
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path != "/callback":
             self.send_error(404)
@@ -286,23 +331,17 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
             self._respond("Authorization denied. You can close this tab.")
             return
 
-        access_token = params.get("access_token", [None])[0]
-        id_token = params.get("id_token", [None])[0]
-        refresh_token = params.get("refresh_token", [None])[0]
-        token_client_id = params.get("token_client_id", [None])[0]
+        code = params.get("code", [None])[0]
         state = params.get("state", [None])[0]
 
-        if access_token:
-            self.server.access_token = access_token
-            self.server.id_token = id_token
-            self.server.refresh_token = refresh_token if refresh_token else None
-            self.server.token_client_id = token_client_id
+        if code:
+            self.server.auth_code = code
             self.server.callback_state = state
             self._respond(
                 "Authorization successful! You can close this tab and return to your terminal."
             )
         else:
-            self.server.auth_error = "No tokens received"
+            self.server.auth_error = "No authorization code received"
             self._respond("Authorization failed. Please try again.")
 
     def _respond(self, message: str) -> None:
@@ -324,11 +363,8 @@ text-align:center;max-width:400px}}</style></head>
 
 
 class _CallbackServer(http.server.HTTPServer):
-    """HTTP server that captures the token relay callback."""
+    """HTTP server that captures the OAuth callback."""
 
-    access_token: str | None = None
-    id_token: str | None = None
-    refresh_token: str | None = None
-    token_client_id: str | None = None
+    auth_code: str | None = None
     auth_error: str | None = None
     callback_state: str | None = None
