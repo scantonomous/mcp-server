@@ -37,7 +37,7 @@ def create_scan(
         default branch.
     :returns: Scan object with id and status.
     """
-    body: dict[str, Any] = {"asset_id": asset_id}
+    body: dict[str, Any] = {"asset_id": asset_id, "trigger_type": "mcp"}
     if ref:
         body["ref"] = ref
     return client.post("/scans", body=body)

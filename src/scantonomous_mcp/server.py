@@ -140,7 +140,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="list_findings",
                 description=(
                     "Search and filter security findings. Defaults to showing unresolved (new) findings. "
-                    "Use severity and state filters to narrow results."
+                    "Use severity and state filters to narrow results. Use asset_id to get findings "
+                    "from the most recent completed scan of a specific repository."
                 ),
                 inputSchema={
                     "type": "object",
@@ -162,6 +163,10 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         "scan_id": {
                             "type": "string",
                             "description": "Filter to findings from a specific scan.",
+                        },
+                        "asset_id": {
+                            "type": "string",
+                            "description": "Filter to findings from the most recent completed scan of this asset/repository.",
                         },
                         "limit": {
                             "type": "integer",
@@ -288,6 +293,7 @@ def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
                 state=args.get("state"),
                 query=args.get("query"),
                 scan_id=args.get("scan_id"),
+                asset_id=args.get("asset_id"),
                 limit=args.get("limit", 25),
             )
         case "get_finding":
