@@ -1,15 +1,17 @@
-"""OAuth 2.0 Authorization Code + PKCE flow with keychain token storage."""
+"""Token relay auth flow with keychain token storage.
+
+The MCP server authenticates by opening the user's browser to the productweb
+consent page. After the user approves, productweb relays its Amplify session
+tokens (access, ID, refresh) to a localhost callback via a hidden form POST.
+The refresh token is stored in the system keychain for future sessions.
+"""
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import http.server
 import json
 import logging
-import os
 import secrets
-import threading
 import time
 import urllib.parse
 import webbrowser
@@ -34,18 +36,21 @@ STAGE_CONFIGS: dict[str, dict[str, str]] = {
         "cognito_domain": "scntnms-dev.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://dev.scntnms.services/v1",
         "web_domain": "web.dev.scntnms.services",
+        "region": "us-west-2",
     },
     "beta": {
         "client_id": "",  # Set after beta deploy
         "cognito_domain": "scntnms-beta.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://beta.scntnms.services/v1",
         "web_domain": "web.beta.scntnms.services",
+        "region": "us-west-2",
     },
     "prod": {
         "client_id": "",  # Set after prod deploy
         "cognito_domain": "scntnms-prod.auth.us-west-2.amazoncognito.com",
         "api_base_url": "https://scntnms.services/v1",
         "web_domain": "web.scntnms.services",
+        "region": "us-west-2",
     },
 }
 
@@ -58,19 +63,20 @@ def get_default_client_id(stage: str) -> str | None:
 
 @dataclass
 class TokenSet:
-    """OAuth token set with expiry tracking."""
+    """Token set with expiry tracking."""
 
     access_token: str
     id_token: str
     refresh_token: str | None
+    token_client_id: str | None  # Cognito client ID that issued the tokens
     expires_at: float  # epoch seconds
 
 
 class AuthManager:
-    """Manages OAuth 2.0 Authorization Code + PKCE flow.
+    """Manages token relay auth flow.
 
-    Handles browser-based login, token exchange, keychain storage,
-    and automatic token refresh.
+    Opens the browser to the productweb consent page, receives relayed Amplify
+    tokens via localhost POST callback, and handles automatic token refresh.
     """
 
     def __init__(
@@ -83,6 +89,7 @@ class AuthManager:
         stage_cfg = STAGE_CONFIGS.get(stage, STAGE_CONFIGS["dev"])
         self.cognito_domain = stage_cfg["cognito_domain"]
         self.web_domain = stage_cfg["web_domain"]
+        self.region = stage_cfg["region"]
         self._tokens: TokenSet | None = None
         self._http = httpx.Client(timeout=30)
 
@@ -101,12 +108,17 @@ class AuthManager:
 
         # Try refresh from keychain
         refresh_token = self._tokens.refresh_token if self._tokens else None
-        if not refresh_token:
-            refresh_token = keyring.get_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
+        token_client_id = self._tokens.token_client_id if self._tokens else None
 
-        if refresh_token:
+        if not refresh_token:
+            stored = self._load_keychain_config()
+            if stored:
+                refresh_token = stored.get("refresh_token")
+                token_client_id = stored.get("token_client_id")
+
+        if refresh_token and token_client_id:
             try:
-                self._tokens = self._refresh_tokens(refresh_token)
+                self._tokens = self._refresh_tokens(refresh_token, token_client_id)
                 return self._tokens.access_token
             except AuthError:
                 logger.info("Refresh token expired, re-auth required")
@@ -124,13 +136,7 @@ class AuthManager:
         raise AuthError("Not authenticated")
 
     def login(self) -> None:
-        """Run the browser-based OAuth login flow."""
-        code_verifier = secrets.token_urlsafe(64)
-        code_challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
-            .rstrip(b"=")
-            .decode()
-        )
+        """Run the browser-based token relay login flow."""
         state = secrets.token_urlsafe(32)
 
         # Find an available port
@@ -152,14 +158,9 @@ class AuthManager:
 
         redirect_uri = f"http://localhost:{port}/callback"
 
-        # Build the authorize URL — goes through productweb consent page
+        # Build the authorize URL — goes to productweb consent page
         auth_params = urllib.parse.urlencode({
-            "client_id": self.client_id,
             "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": "openid profile",
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
             "state": state,
         })
         authorize_url = f"https://{self.web_domain}/authorize?{auth_params}"
@@ -167,37 +168,35 @@ class AuthManager:
         logger.info("Opening browser for authorization...")
         webbrowser.open(authorize_url)
 
-        # Wait for the callback
-        server.timeout = 120
-        server_thread = threading.Thread(target=server.handle_request, daemon=True)
-        server_thread.start()
-        server_thread.join(timeout=120)
+        # Wait for the callback (GET redirect with tokens from productweb).
+        # 5 minutes to allow time for login + consent.
+        server.timeout = 300
+        server.handle_request()
 
-        if not server.auth_code:
+        if not server.access_token:
             raise AuthError(
                 server.auth_error or "Authorization timed out. Please try again."
             )
 
         if server.callback_state != state:
-            raise AuthError("State mismatch — possible CSRF attack. Aborting.")
+            raise AuthError("State mismatch -- possible CSRF attack. Aborting.")
 
-        # Exchange auth code for tokens
-        self._tokens = self._exchange_code(
-            server.auth_code, redirect_uri, code_verifier
+        self._tokens = TokenSet(
+            access_token=server.access_token,
+            id_token=server.id_token or "",
+            refresh_token=server.refresh_token,
+            token_client_id=server.token_client_id,
+            expires_at=time.time() + 900,  # Productweb tokens: ~15 min
         )
 
-        # Store refresh token in keychain
+        # Store refresh token and config in keychain
         if self._tokens.refresh_token:
-            keyring.set_password(
-                KEYRING_SERVICE, KEYRING_REFRESH_KEY, self._tokens.refresh_token
-            )
-
-        # Store config for future sessions
-        config_data = json.dumps({
-            "client_id": self.client_id,
-            "stage": self.stage,
-        })
-        keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
+            config_data = json.dumps({
+                "refresh_token": self._tokens.refresh_token,
+                "token_client_id": self._tokens.token_client_id,
+                "stage": self.stage,
+            })
+            keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
 
         logger.info("Authentication successful")
 
@@ -205,67 +204,62 @@ class AuthManager:
         """Clear stored tokens."""
         self._tokens = None
         try:
-            keyring.delete_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
+            keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
         except keyring.errors.PasswordDeleteError:
             pass
+        # Also clean up legacy key
         try:
-            keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
+            keyring.delete_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
         except keyring.errors.PasswordDeleteError:
             pass
         logger.info("Logged out successfully")
 
-    def _exchange_code(
-        self, code: str, redirect_uri: str, code_verifier: str
-    ) -> TokenSet:
-        """Exchange authorization code for tokens via Cognito token endpoint."""
+    def _load_keychain_config(self) -> dict[str, str] | None:
+        """Load stored config from keychain."""
+        raw = keyring.get_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def _refresh_tokens(self, refresh_token: str, token_client_id: str) -> TokenSet:
+        """Refresh tokens using Cognito InitiateAuth API.
+
+        The refresh token was issued by Amplify (SRP flow), so we use the
+        Cognito service API rather than the hosted UI /oauth2/token endpoint.
+        """
         resp = self._http.post(
-            f"https://{self.cognito_domain}/oauth2/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": self.client_id,
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "code_verifier": code_verifier,
+            f"https://cognito-idp.{self.region}.amazonaws.com/",
+            json={
+                "AuthFlow": "REFRESH_TOKEN_AUTH",
+                "ClientId": token_client_id,
+                "AuthParameters": {
+                    "REFRESH_TOKEN": refresh_token,
+                },
             },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Content-Type": "application/x-amz-json-1.1",
+                "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+            },
         )
         if resp.status_code != 200:
-            raise AuthError(f"Token exchange failed: {resp.status_code} {resp.text}")
-
-        data = resp.json()
-        return TokenSet(
-            access_token=data["access_token"],
-            id_token=data["id_token"],
-            refresh_token=data.get("refresh_token"),
-            expires_at=time.time() + data.get("expires_in", 3600),
-        )
-
-    def _refresh_tokens(self, refresh_token: str) -> TokenSet:
-        """Refresh tokens using a refresh token."""
-        resp = self._http.post(
-            f"https://{self.cognito_domain}/oauth2/token",
-            data={
-                "grant_type": "refresh_token",
-                "client_id": self.client_id,
-                "refresh_token": refresh_token,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        if resp.status_code != 200:
-            # Clear invalid refresh token
+            # Clear invalid config
             try:
-                keyring.delete_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
+                keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
             except keyring.errors.PasswordDeleteError:
                 pass
             raise AuthError("Refresh token expired. Please re-authenticate.")
 
         data = resp.json()
+        result = data.get("AuthenticationResult", {})
         return TokenSet(
-            access_token=data["access_token"],
-            id_token=data["id_token"],
-            # Cognito doesn't return a new refresh token on refresh
+            access_token=result["AccessToken"],
+            id_token=result["IdToken"],
             refresh_token=refresh_token,
-            expires_at=time.time() + data.get("expires_in", 3600),
+            token_client_id=token_client_id,
+            expires_at=time.time() + result.get("ExpiresIn", 900),
         )
 
 
@@ -274,11 +268,12 @@ class AuthError(Exception):
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
-    """HTTP handler for the OAuth callback."""
+    """HTTP handler for the token relay callback."""
 
     server: _CallbackServer  # type: ignore[assignment]
 
     def do_GET(self) -> None:
+        """Handle GET — receives redirected tokens or deny/error."""
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path != "/callback":
             self.send_error(404)
@@ -291,17 +286,23 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
             self._respond("Authorization denied. You can close this tab.")
             return
 
-        code = params.get("code", [None])[0]
+        access_token = params.get("access_token", [None])[0]
+        id_token = params.get("id_token", [None])[0]
+        refresh_token = params.get("refresh_token", [None])[0]
+        token_client_id = params.get("token_client_id", [None])[0]
         state = params.get("state", [None])[0]
 
-        if code:
-            self.server.auth_code = code
+        if access_token:
+            self.server.access_token = access_token
+            self.server.id_token = id_token
+            self.server.refresh_token = refresh_token if refresh_token else None
+            self.server.token_client_id = token_client_id
             self.server.callback_state = state
             self._respond(
                 "Authorization successful! You can close this tab and return to your terminal."
             )
         else:
-            self.server.auth_error = "No authorization code received"
+            self.server.auth_error = "No tokens received"
             self._respond("Authorization failed. Please try again.")
 
     def _respond(self, message: str) -> None:
@@ -323,8 +324,11 @@ text-align:center;max-width:400px}}</style></head>
 
 
 class _CallbackServer(http.server.HTTPServer):
-    """HTTP server that captures the OAuth callback."""
+    """HTTP server that captures the token relay callback."""
 
-    auth_code: str | None = None
+    access_token: str | None = None
+    id_token: str | None = None
+    refresh_token: str | None = None
+    token_client_id: str | None = None
     auth_error: str | None = None
     callback_state: str | None = None
