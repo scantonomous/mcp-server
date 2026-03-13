@@ -98,22 +98,23 @@ def serve(ctx: click.Context) -> None:
 
 @main.command()
 @click.option(
-    "--global", "is_global", is_flag=True, help="Write to global Claude Code config (~/.claude.json)."
+    "--local", "is_local", is_flag=True, help="Write to project-level .claude.json instead of global."
 )
 @click.pass_context
-def init(ctx: click.Context, is_global: bool) -> None:
+def init(ctx: click.Context, is_local: bool) -> None:
     """Write MCP server config for Claude Code.
 
     Adds this server to the Claude Code MCP configuration so the agent
-    can discover and use Scantonomous tools automatically.
+    can discover and use Scantonomous tools automatically. Writes to
+    the global config (~/.claude.json) by default.
     """
     client_id = _require_client_id(ctx)
     stage = ctx.obj["stage"]
 
-    if is_global:
-        config_path = os.path.expanduser("~/.claude.json")
-    else:
+    if is_local:
         config_path = os.path.join(os.getcwd(), ".claude.json")
+    else:
+        config_path = os.path.expanduser("~/.claude.json")
 
     # Load existing config or start fresh
     config: dict = {}

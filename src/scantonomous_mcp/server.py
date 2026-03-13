@@ -25,7 +25,29 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
     """
     auth = AuthManager(client_id=client_id, stage=stage)
     api = ScantonomousClient(auth)
-    server = Server("scantonomous")
+    server = Server(
+        "scantonomous",
+        instructions=(
+            "Scantonomous is a security scanning platform. Use these tools to scan "
+            "repositories for security vulnerabilities, review findings, get AI-generated "
+            "remediation suggestions, and triage issues.\n\n"
+            "When to use these tools:\n"
+            "- When the user asks about security vulnerabilities, findings, or scans\n"
+            "- After significant code changes, to check for newly introduced issues\n"
+            "- When the user asks you to run a security scan or review security posture\n"
+            "- When triaging findings: get the finding details, read the actual source "
+            "code, decide if it's a true positive or false positive, then fix or triage it\n\n"
+            "Triage workflow:\n"
+            "1. list_findings to see unresolved findings\n"
+            "2. get_finding for full details (file path, line numbers, evidence)\n"
+            "3. get_remediation for AI-suggested fix\n"
+            "4. Read the actual source file to verify\n"
+            "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
+            "6. If false positive: triage_finding with state=false_positive and explain why\n"
+            "7. If accepted risk: triage_finding with state=accepted_risk with justification\n\n"
+            "Prioritize critical and high severity findings first."
+        ),
+    )
 
     @server.list_tools()
     async def handle_list_tools() -> list[Tool]:
