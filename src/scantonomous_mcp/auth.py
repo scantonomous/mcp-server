@@ -36,21 +36,21 @@ CALLBACK_PORTS = [19827, 19828, 19829]
 STAGE_CONFIGS: dict[str, dict[str, str]] = {
     "dev": {
         "client_id": "41o0m0h3sk9akaj1q0sqeq2di6",
-        "cognito_domain": "scntnms-dev.auth.us-west-2.amazoncognito.com",
+        "cognito_domain": "auth.dev.scntnms.services",
         "api_base_url": "https://dev.scntnms.services/v1",
         "web_domain": "web.dev.scntnms.services",
         "region": "us-west-2",
     },
     "beta": {
         "client_id": "",  # Set after beta deploy
-        "cognito_domain": "scntnms-beta.auth.us-west-2.amazoncognito.com",
+        "cognito_domain": "auth.beta.scntnms.services",
         "api_base_url": "https://beta.scntnms.services/v1",
         "web_domain": "web.beta.scntnms.services",
         "region": "us-west-2",
     },
     "prod": {
         "client_id": "",  # Set after prod deploy
-        "cognito_domain": "scntnms-prod.auth.us-west-2.amazoncognito.com",
+        "cognito_domain": "auth.scntnms.services",
         "api_base_url": "https://scntnms.services/v1",
         "web_domain": "web.scntnms.services",
         "region": "us-west-2",
@@ -182,7 +182,7 @@ class AuthManager:
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         })
-        authorize_url = f"https://{self.web_domain}/authorize?{auth_params}"
+        authorize_url = f"https://{self.cognito_domain}/oauth2/authorize?{auth_params}"
 
         logger.info("Opening browser for authorization...")
         webbrowser.open(authorize_url)
