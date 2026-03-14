@@ -1,8 +1,19 @@
 # Scantonomous MCP Server
 
-MCP (Model Context Protocol) server that connects AI agents (Claude Code, Codex) to the Scantonomous security scanning platform. Agents can initiate scans, explore findings, apply fixes, and triage issues autonomously.
+MCP (Model Context Protocol) server that connects AI agents to the Scantonomous security scanning platform. Agents can initiate scans, explore findings, apply fixes, and triage issues autonomously.
+
+## Prerequisites
+
+- Python 3.11+
+- A Scantonomous account on the target stage (dev, beta, prod)
 
 ## Installation
+
+```bash
+uv tool install -e path/to/mcp-server
+```
+
+Or with pip:
 
 ```bash
 pip install -e path/to/mcp-server
@@ -13,33 +24,96 @@ pip install -e path/to/mcp-server
 ### 1. Authenticate
 
 ```bash
-scantonomous-mcp --client-id <MCP_CLIENT_ID> --stage dev auth login
+scantonomous-mcp --stage dev auth login
 ```
 
-This opens a browser for OAuth login. Tokens are stored in your system keychain.
+This opens your browser to `auth.dev.scntnms.services` for OAuth login. Tokens are stored in your system keychain. No client ID needed — it's auto-detected per stage.
 
-### 2. Configure Claude Code
+### 2. Configure Your AI Agent
 
+#### Claude Code (CLI)
+
+Automatic:
 ```bash
-scantonomous-mcp --client-id <MCP_CLIENT_ID> --stage dev init
+scantonomous-mcp --stage dev init
 ```
 
-Or add to `~/.claude.json` manually:
+Or manual:
+```bash
+claude mcp add scantonomous -- scantonomous-mcp --stage dev serve
+```
+
+Restart Claude Code after configuring.
+
+#### Claude Code (VS Code Extension)
+
+Add to your VS Code `settings.json` or project `.vscode/settings.json`:
+
+```json
+{
+  "claude-code.mcpServers": {
+    "scantonomous": {
+      "command": "scantonomous-mcp",
+      "args": ["--stage", "dev", "serve"]
+    }
+  }
+}
+```
+
+#### Codex
+
+Add to your project's `codex.json` or `~/.codex/config.json`:
 
 ```json
 {
   "mcpServers": {
     "scantonomous": {
       "command": "scantonomous-mcp",
-      "args": ["--stage", "dev", "--client-id", "<MCP_CLIENT_ID>", "serve"]
+      "args": ["--stage", "dev", "serve"]
     }
   }
 }
 ```
 
-### 3. Restart Claude Code
+### 3. Verify
 
-The MCP server will start automatically when Claude Code launches.
+After restarting your agent, you should see Scantonomous tools available (e.g., `list_assets`, `create_scan`, `list_findings`).
+
+## Uninstall
+
+### Remove from Claude Code
+
+```bash
+claude mcp remove scantonomous
+```
+
+Or if you used `init`, remove the `"scantonomous"` entry from `~/.claude.json` under `mcpServers`.
+
+### Remove from VS Code
+
+Delete the `"scantonomous"` entry from `"claude-code.mcpServers"` in your `settings.json`.
+
+### Remove from Codex
+
+Delete the `"scantonomous"` entry from `"mcpServers"` in `codex.json`.
+
+### Uninstall the CLI
+
+```bash
+uv tool uninstall scantonomous-mcp
+```
+
+Or with pip:
+
+```bash
+pip uninstall scantonomous-mcp
+```
+
+### Clear stored credentials
+
+```bash
+scantonomous-mcp --stage dev auth logout
+```
 
 ## Available Tools
 
@@ -56,21 +130,17 @@ The MCP server will start automatically when Claude Code launches.
 | `triage_finding` | Mark finding as fixed/FP/accepted |
 | `get_findings_summary` | Severity and state statistics |
 
-## CLI Commands
+## CLI Reference
 
 ```bash
-scantonomous-mcp auth login    # Browser-based OAuth login
-scantonomous-mcp auth logout   # Clear stored tokens
-scantonomous-mcp auth status   # Check auth status
-scantonomous-mcp serve         # Run MCP server (stdio)
-scantonomous-mcp init          # Write Claude Code MCP config
+scantonomous-mcp --stage <stage> auth login     # Browser-based OAuth login
+scantonomous-mcp --stage <stage> auth logout    # Clear stored tokens
+scantonomous-mcp --stage <stage> auth status    # Check auth status
+scantonomous-mcp --stage <stage> serve          # Run MCP server (stdio)
+scantonomous-mcp --stage <stage> init           # Write Claude Code MCP config
 ```
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `SCANTONOMOUS_MCP_CLIENT_ID` | Cognito MCP App Client ID (alternative to `--client-id`) |
+The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 
 ## Development
 
