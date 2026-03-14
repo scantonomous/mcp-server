@@ -10,13 +10,25 @@ MCP (Model Context Protocol) server that connects AI agents to the Scantonomous 
 ## Installation
 
 ```bash
-uv tool install -e path/to/mcp-server
+uv tool install git+https://github.com/scantonomous/mcp-server.git
 ```
 
 Or with pip:
 
 ```bash
-pip install -e path/to/mcp-server
+pip install git+https://github.com/scantonomous/mcp-server.git
+```
+
+## Update
+
+```bash
+uv tool upgrade scantonomous-mcp
+```
+
+Or with pip:
+
+```bash
+pip install --upgrade git+https://github.com/scantonomous/mcp-server.git
 ```
 
 ## Setup
