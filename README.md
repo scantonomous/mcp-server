@@ -24,7 +24,7 @@ pip install -e path/to/mcp-server
 ### 1. Authenticate
 
 ```bash
-scantonomous-mcp --stage dev auth login
+scantonomous-mcp --stage dev login
 ```
 
 This opens your browser to `auth.dev.scntnms.services` for OAuth login. Tokens are stored in your system keychain. No client ID needed — it's auto-detected per stage.
@@ -112,7 +112,7 @@ pip uninstall scantonomous-mcp
 ### Clear stored credentials
 
 ```bash
-scantonomous-mcp --stage dev auth logout
+scantonomous-mcp --stage dev logout
 ```
 
 ## Available Tools
@@ -133,11 +133,11 @@ scantonomous-mcp --stage dev auth logout
 ## CLI Reference
 
 ```bash
-scantonomous-mcp --stage <stage> auth login     # Browser-based OAuth login
-scantonomous-mcp --stage <stage> auth logout    # Clear stored tokens
-scantonomous-mcp --stage <stage> auth status    # Check auth status
-scantonomous-mcp --stage <stage> serve          # Run MCP server (stdio)
-scantonomous-mcp --stage <stage> init           # Write Claude Code MCP config
+scantonomous-mcp --stage <stage> login      # Browser-based OAuth login
+scantonomous-mcp --stage <stage> logout     # Clear stored tokens
+scantonomous-mcp --stage <stage> status     # Check auth status
+scantonomous-mcp --stage <stage> serve      # Run MCP server (stdio)
+scantonomous-mcp --stage <stage> init       # Write Claude Code MCP config
 ```
 
 The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.

@@ -29,12 +29,7 @@ def main(ctx: click.Context, stage: str, client_id: str | None, verbose: bool) -
     ctx.obj["client_id"] = client_id
 
 
-@main.group()
-def auth() -> None:
-    """Manage authentication."""
-
-
-@auth.command()
+@main.command()
 @click.pass_context
 def login(ctx: click.Context) -> None:
     """Authenticate via browser-based OAuth flow."""
@@ -46,7 +41,7 @@ def login(ctx: click.Context) -> None:
     click.echo("Authenticated successfully.", err=True)
 
 
-@auth.command()
+@main.command()
 @click.pass_context
 def logout(ctx: click.Context) -> None:
     """Clear stored authentication tokens."""
@@ -58,7 +53,7 @@ def logout(ctx: click.Context) -> None:
     click.echo("Logged out.", err=True)
 
 
-@auth.command()
+@main.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Check authentication status."""
