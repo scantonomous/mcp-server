@@ -23,8 +23,31 @@ from typing import Any
 
 import httpx
 import keyring
+import keyring.backends.fail
+import keyring.backends.null
 
 logger = logging.getLogger(__name__)
+
+# Insecure keyring backends that should not be trusted with refresh tokens.
+_INSECURE_BACKENDS = (
+    keyring.backends.fail.Keyring,
+    keyring.backends.null.Keyring,
+)
+
+
+def _keyring_is_secure() -> bool:
+    """Return True if the active keyring backend provides encrypted storage.
+
+    Secure backends (macOS Keychain, Windows Credential Manager, SecretService)
+    have priority > 0. Insecure backends (null, fail, plaintext file) have
+    priority <= 0 and should not be trusted with refresh tokens.
+    """
+    backend = keyring.get_keyring()
+    if isinstance(backend, _INSECURE_BACKENDS):
+        return False
+    priority = getattr(backend, "priority", -1)
+    return priority > 0
+
 
 KEYRING_SERVICE = "scantonomous-mcp"
 KEYRING_REFRESH_KEY = "refresh-token"
@@ -208,15 +231,25 @@ class AuthManager:
             code_verifier=code_verifier,
         )
 
-        # Store refresh token in keychain
+        # Store refresh token in keychain (only if backend is secure)
         if self._tokens.refresh_token:
-            config_data = json.dumps(
-                {
-                    "refresh_token": self._tokens.refresh_token,
-                    "stage": self.stage,
-                }
-            )
-            keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
+            if _keyring_is_secure():
+                config_data = json.dumps(
+                    {
+                        "refresh_token": self._tokens.refresh_token,
+                        "stage": self.stage,
+                    }
+                )
+                keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
+            else:
+                backend = type(keyring.get_keyring()).__name__
+                logger.warning(
+                    "Keyring backend '%s' is not secure — refresh token will "
+                    "not be persisted. You will need to re-authenticate each "
+                    "session. Install a secure keyring backend (e.g., "
+                    "SecretService on Linux) to enable token persistence.",
+                    backend,
+                )
 
         logger.info("Authentication successful")
 
@@ -235,7 +268,12 @@ class AuthManager:
         logger.info("Logged out successfully")
 
     def _load_keychain_config(self) -> dict[str, str] | None:
-        """Load stored config from keychain."""
+        """Load stored config from keychain.
+
+        Returns None if the keyring backend is insecure.
+        """
+        if not _keyring_is_secure():
+            return None
         raw = keyring.get_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
         if not raw:
             return None
