@@ -135,9 +135,7 @@ class AuthManager:
             except AuthError:
                 logger.info("Refresh token expired, re-auth required")
 
-        raise AuthError(
-            "Not authenticated. Please run: scantonomous-mcp auth login"
-        )
+        raise AuthError("Not authenticated. Please run: scantonomous-mcp auth login")
 
     def get_id_token(self) -> str:
         """Return a valid ID token, refreshing if needed."""
@@ -173,15 +171,17 @@ class AuthManager:
 
         # Build the authorize URL — goes to productweb consent page, which
         # redirects to Cognito /oauth2/authorize after user approval.
-        auth_params = urllib.parse.urlencode({
-            "client_id": self.client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": "openid profile",
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        })
+        auth_params = urllib.parse.urlencode(
+            {
+                "client_id": self.client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": "openid profile",
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
         authorize_url = f"https://{self.cognito_domain}/oauth2/authorize?{auth_params}"
 
         logger.info("Opening browser for authorization...")
@@ -210,10 +210,12 @@ class AuthManager:
 
         # Store refresh token in keychain
         if self._tokens.refresh_token:
-            config_data = json.dumps({
-                "refresh_token": self._tokens.refresh_token,
-                "stage": self.stage,
-            })
+            config_data = json.dumps(
+                {
+                    "refresh_token": self._tokens.refresh_token,
+                    "stage": self.stage,
+                }
+            )
             keyring.set_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY, config_data)
 
         logger.info("Authentication successful")
@@ -223,12 +225,12 @@ class AuthManager:
         self._tokens = None
         try:
             keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
-        except keyring.errors.PasswordDeleteError:
+        except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
             pass
         # Also clean up legacy key
         try:
             keyring.delete_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
-        except keyring.errors.PasswordDeleteError:
+        except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
             pass
         logger.info("Logged out successfully")
 
@@ -242,9 +244,7 @@ class AuthManager:
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def _exchange_code(
-        self, code: str, redirect_uri: str, code_verifier: str
-    ) -> TokenSet:
+    def _exchange_code(self, code: str, redirect_uri: str, code_verifier: str) -> TokenSet:
         """Exchange authorization code for tokens via Cognito /oauth2/token.
 
         :param code: Authorization code from Cognito callback.
@@ -295,7 +295,7 @@ class AuthManager:
             # Clear invalid config
             try:
                 keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
-            except keyring.errors.PasswordDeleteError:
+            except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
                 pass
             raise AuthError("Refresh token expired. Please re-authenticate.")
 

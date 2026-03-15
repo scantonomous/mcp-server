@@ -1,0 +1,29 @@
+#!/bin/sh
+# Pre-commit hook: block main commits, lint, and format-check.
+
+set -e
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+if [ "$branch" = "main" ]; then
+  echo "ERROR: Direct commits to main are not allowed. Create a branch first."
+  exit 1
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+VENV="$REPO_ROOT/.venv/bin/activate"
+
+if [ ! -f "$VENV" ]; then
+  echo "ERROR: .venv not found. Run: python3 -m venv .venv && pip install -e '.[dev]'"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+. "$VENV"
+
+echo "▸ ruff check..."
+ruff check src/
+
+echo "▸ ruff format --check..."
+ruff format --check src/
+
+echo "✓ pre-commit passed"

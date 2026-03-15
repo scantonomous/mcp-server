@@ -9,12 +9,16 @@ import sys
 
 import click
 
-from .auth import AuthManager, get_default_client_id
+from .auth import AuthError, AuthManager, get_default_client_id
 
 
 @click.group()
 @click.option("--stage", default="dev", help="Deployment stage (dev, beta, prod).")
-@click.option("--client-id", envvar="SCANTONOMOUS_MCP_CLIENT_ID", help="Cognito MCP Client ID (auto-detected per stage if omitted).")
+@click.option(
+    "--client-id",
+    envvar="SCANTONOMOUS_MCP_CLIENT_ID",
+    help="Cognito MCP Client ID (auto-detected per stage if omitted).",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging.")
 @click.pass_context
 def main(ctx: click.Context, stage: str, client_id: str | None, verbose: bool) -> None:
@@ -64,7 +68,7 @@ def status(ctx: click.Context) -> None:
     try:
         manager.get_access_token()
         click.echo("Authenticated.", err=True)
-    except Exception as e:
+    except (AuthError, KeyError, ValueError) as e:
         click.echo(f"Not authenticated: {e}", err=True)
         sys.exit(1)
 
@@ -93,7 +97,10 @@ def serve(ctx: click.Context) -> None:
 
 @main.command()
 @click.option(
-    "--local", "is_local", is_flag=True, help="Write to project-level .claude.json instead of global."
+    "--local",
+    "is_local",
+    is_flag=True,
+    help="Write to project-level .claude.json instead of global.",
 )
 @click.pass_context
 def init(ctx: click.Context, is_local: bool) -> None:
@@ -103,7 +110,7 @@ def init(ctx: click.Context, is_local: bool) -> None:
     can discover and use Scantonomous tools automatically. Writes to
     the global config (~/.claude.json) by default.
     """
-    client_id = _require_client_id(ctx)
+    _require_client_id(ctx)
     stage = ctx.obj["stage"]
 
     if is_local:

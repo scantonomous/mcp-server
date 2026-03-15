@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 
 from mcp.server import Server
 from mcp.types import TextContent, Tool
@@ -263,10 +262,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             result = _dispatch_tool(api, name, args)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except AuthError as e:
-            return [TextContent(
-                type="text",
-                text=f"Authentication required: {e}\n\nPlease ask the user to run: scantonomous-mcp auth login",
-            )]
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Authentication required: {e}\n\nPlease ask the user to run: scantonomous-mcp auth login",
+                )
+            ]
         except ApiError as e:
             return [TextContent(type="text", text=f"API error: {e}")]
 

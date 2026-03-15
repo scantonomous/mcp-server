@@ -43,7 +43,7 @@ class ScantonomousClient:
             return self._account_id
 
         profile = self.get("/account/me")
-        self._account_id = profile["account_id"]
+        self._account_id = str(profile["account_id"])
         return self._account_id
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
