@@ -225,12 +225,12 @@ class AuthManager:
         self._tokens = None
         try:
             keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
-        except keyring.errors.PasswordDeleteError:
+        except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
             pass
         # Also clean up legacy key
         try:
             keyring.delete_password(KEYRING_SERVICE, KEYRING_REFRESH_KEY)
-        except keyring.errors.PasswordDeleteError:
+        except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
             pass
         logger.info("Logged out successfully")
 
@@ -295,7 +295,7 @@ class AuthManager:
             # Clear invalid config
             try:
                 keyring.delete_password(KEYRING_SERVICE, KEYRING_CONFIG_KEY)
-            except keyring.errors.PasswordDeleteError:
+            except keyring.errors.PasswordDeleteError:  # type: ignore[attr-defined]
                 pass
             raise AuthError("Refresh token expired. Please re-authenticate.")
 
