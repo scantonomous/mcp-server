@@ -157,5 +157,17 @@ The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 ## Development
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
+git config core.hooksPath .githooks
+```
+
+### Invoke Targets
+
+```bash
+invoke test           # ruff check + ruff format --check + pyright
+invoke release        # test (pre-publish gate)
+invoke clean          # remove caches and build artifacts
+invoke publish --version=X.Y.Z  # bump version, build wheel, create GitHub Release
 ```
