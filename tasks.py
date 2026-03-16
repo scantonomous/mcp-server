@@ -37,14 +37,24 @@ def clean(ctx: Context) -> None:
 
 
 @task
-def test(ctx: Context) -> None:
+def build(ctx: Context) -> None:
     """Run lint, format check, and type check."""
     ctx.run("ruff check src/", pty=True)
     ctx.run("ruff format --check src/", pty=True)
     ctx.run("pyright src/", pty=True)
+    ctx.run("bandit -r src/ -q", pty=True)
+    ctx.run("pip-audit", pty=True)
+    ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
+    ctx.run("detect-secrets audit --report .secrets.baseline", pty=True)
 
 
-@task(pre=[test])
+@task
+def test(ctx: Context) -> None:
+    """Run unit tests."""
+    ctx.run("python -m pytest tests/ -v", pty=True)
+
+
+@task(pre=[build, test])
 def release(ctx: Context) -> None:
     """Full pre-publish validation."""
     print("  release checks passed")

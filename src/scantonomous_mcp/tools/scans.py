@@ -16,13 +16,23 @@ def list_assets(
 
     :param query: Optional search query to filter assets.
     :param limit: Maximum number of results (default 25).
-    :returns: List of assets with id, name, provider, and status.
+    :returns: Slim list of assets with id and repo path for easy matching.
     """
     account_id = client.get_account_id()
     params: dict[str, Any] = {"limit": limit}
     if query:
         params["query"] = query
-    return client.get(f"/account/{account_id}/assets", params=params)
+    data = client.get(f"/account/{account_id}/assets", params=params)
+    items = data.get("items", [])
+    return {
+        "assets": [
+            {
+                "asset_id": a["asset_id"],
+                "repo_path": a.get("repo_path", a.get("name", "")),
+            }
+            for a in items
+        ],
+    }
 
 
 def create_scan(
