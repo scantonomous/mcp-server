@@ -53,7 +53,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
         return [
             Tool(
                 name="list_assets",
-                description="List connected repositories and assets in your Scantonomous account.",
+                description=(
+                    "List connected repositories and assets. Returns asset_id and "
+                    "repo_path (e.g. 'scantonomous/services') for each asset. Use "
+                    "the asset_id with create_scan or list_findings."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
