@@ -12,6 +12,7 @@ def triage_finding(
     finding_id: str,
     state: str,
     reason: str,
+    ai_model: str,
 ) -> dict[str, Any]:
     """Record a triage decision on a finding.
 
@@ -19,9 +20,15 @@ def triage_finding(
     :param state: New state: ``fixed``, ``false_positive``, or ``accepted_risk``.
     :param reason: Explanation for the decision. Required for ``false_positive``
         and ``accepted_risk`` states.
+    :param ai_model: The AI model performing the triage (e.g. "Claude Opus 4.6").
     :returns: Updated finding state.
     """
-    body: dict[str, Any] = {"state": state, "reason": reason}
+    body: dict[str, Any] = {
+        "state": state,
+        "reason": reason,
+        "source": "mcp",
+        "ai_model": ai_model,
+    }
     return client.patch(f"/findings/{finding_id}/state", body=body)
 
 

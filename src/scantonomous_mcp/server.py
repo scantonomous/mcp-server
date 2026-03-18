@@ -239,8 +239,16 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                                 "and accepted_risk. For fixed, describe the fix applied."
                             ),
                         },
+                        "ai_model": {
+                            "type": "string",
+                            "description": (
+                                "The AI model and version performing the triage "
+                                "(e.g., 'Claude Opus 4.6', 'GPT-4o'). "
+                                "Self-report your model name."
+                            ),
+                        },
                     },
-                    "required": ["finding_id", "state", "reason"],
+                    "required": ["finding_id", "state", "reason", "ai_model"],
                 },
             ),
             Tool(
@@ -311,6 +319,7 @@ def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
                 finding_id=args["finding_id"],
                 state=args["state"],
                 reason=args["reason"],
+                ai_model=args["ai_model"],
             )
         case "get_findings_summary":
             return triage.get_findings_summary(api, scan_id=args.get("scan_id"))
