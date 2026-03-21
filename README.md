@@ -39,7 +39,7 @@ pip install --upgrade git+https://github.com/scantonomous/mcp-server.git
 scantonomous-mcp --stage dev login
 ```
 
-This opens your browser to `auth.dev.scntnms.services` for OAuth login. Tokens are stored in your system keychain. No client ID needed — it's auto-detected per stage.
+This opens your browser to `auth.dev.scantonomous.ai` for OAuth login. Tokens are stored in your system keychain. No client ID needed — it's auto-detected per stage.
 
 ### 2. Configure Your AI Agent
 
