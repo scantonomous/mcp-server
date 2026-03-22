@@ -27,6 +27,7 @@ When reviewing findings, follow this process for each finding:
    - **True positive (fixable):** Apply the fix, verify tests pass, then call `triage_finding` with `state=fixed`
    - **False positive:** Call `triage_finding` with `state=false_positive` and explain why (see FP heuristics below)
    - **Accepted risk:** Call `triage_finding` with `state=accepted_risk` and document compensating controls
+5. **Batch triage:** When multiple findings share the same outcome and reason (e.g., several false positives in test code), use `finding_ids` to triage up to 25 at once instead of calling `triage_finding` repeatedly
 
 ## Prioritization
 

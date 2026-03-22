@@ -43,7 +43,9 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "4. Read the actual source file to verify\n"
             "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
             "6. If false positive: triage_finding with state=false_positive and explain why\n"
-            "7. If accepted risk: triage_finding with state=accepted_risk with justification\n\n"
+            "7. If accepted risk: triage_finding with state=accepted_risk with justification\n"
+            "8. When multiple findings share the same triage outcome, use finding_ids to "
+            "batch-triage up to 25 at once\n\n"
             "Prioritize critical and high severity findings first."
         ),
     )
@@ -217,15 +219,26 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="triage_finding",
                 description=(
-                    "Record a triage decision on a finding. Mark it as fixed (after applying a fix), "
-                    "false_positive (with explanation), or accepted_risk (with compensating controls)."
+                    "Record a triage decision on one or more findings. Mark as fixed (after applying "
+                    "a fix), false_positive (with explanation), or accepted_risk (with compensating "
+                    "controls). Use finding_ids to batch-triage up to 25 findings with the same "
+                    "state and reason in one call."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "finding_id": {
                             "type": "string",
-                            "description": "The finding ID to triage.",
+                            "description": "A single finding ID to triage. Use this OR finding_ids, not both.",
+                        },
+                        "finding_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 25,
+                            "description": (
+                                "A list of finding IDs to triage with the same state and reason "
+                                "(max 25). Use this OR finding_id, not both."
+                            ),
                         },
                         "state": {
                             "type": "string",
@@ -248,7 +261,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             ),
                         },
                     },
-                    "required": ["finding_id", "state", "reason", "ai_model"],
+                    "required": ["state", "reason", "ai_model"],
+                    "oneOf": [
+                        {"required": ["finding_id"]},
+                        {"required": ["finding_ids"]},
+                    ],
                 },
             ),
             Tool(
@@ -316,10 +333,11 @@ def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
         case "triage_finding":
             return triage.triage_finding(
                 api,
-                finding_id=args["finding_id"],
                 state=args["state"],
                 reason=args["reason"],
                 ai_model=args["ai_model"],
+                finding_id=args.get("finding_id"),
+                finding_ids=args.get("finding_ids"),
             )
         case "get_findings_summary":
             return triage.get_findings_summary(api, scan_id=args.get("scan_id"))
