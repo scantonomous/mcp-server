@@ -169,7 +169,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "asset_id": {
                             "type": "string",
-                            "description": "Filter to findings from the most recent completed scan of this asset/repository.",
+                            "description": "Filter to findings for this asset/repository. Queries all findings across all scans.",
                         },
                         "limit": {
                             "type": "integer",

@@ -23,17 +23,17 @@ def list_findings(
         Defaults to ``new`` to show unresolved findings first.
     :param query: Free-text search query.
     :param scan_id: Filter to findings from a specific scan.
-    :param asset_id: Filter to findings from the most recent completed scan
-        of this asset. Ignored if ``scan_id`` is provided.
+    :param asset_id: Filter to findings for this asset/repository. Resolves
+        the asset to its ``source_repository`` and queries OpenSearch
+        directly. Ignored if ``scan_id`` is provided.
     :param limit: Maximum number of results (default 25).
     :returns: List of findings with summary info.
     """
-    # If asset_id is provided (and no explicit scan_id), resolve to the
-    # most recent completed scan for that asset.
+    source_repository: str | None = None
     if asset_id and not scan_id:
-        scan_id = _resolve_latest_scan(client, asset_id)
-        if not scan_id:
-            return {"findings": [], "message": f"No completed scans found for asset {asset_id}"}
+        source_repository = _resolve_source_repository(client, asset_id)
+        if not source_repository:
+            return {"items": [], "total": 0, "message": f"Asset {asset_id} not found"}
 
     params: dict[str, Any] = {"limit": limit}
     if severity:
@@ -41,30 +41,33 @@ def list_findings(
     if state:
         params["state"] = state
     elif not scan_id:
-        # Default to "new" only for account-wide queries. Scan-scoped
-        # findings may not have a canonical state yet, so filtering by
-        # state=new would hide them.
         params["state"] = "new"
     if query:
         params["query"] = query
+    if source_repository:
+        params["source_repository"] = source_repository
 
     if scan_id:
         return client.get(f"/scans/{scan_id}/findings", params=params)
     return client.get("/findings", params=params)
 
 
-def _resolve_latest_scan(client: ScantonomousClient, asset_id: str) -> str | None:
-    """Find the most recent completed scan for an asset.
+def _resolve_source_repository(client: ScantonomousClient, asset_id: str) -> str | None:
+    """Resolve an asset ID to its source_repository identifier.
+
+    Fetches the asset list and returns the ``external_ref`` field
+    (e.g. ``"github:scantonomous/services"``), which matches the
+    ``source_repository`` field in the findings OpenSearch index.
 
     :param client: API client.
     :param asset_id: The asset ID to look up.
-    :returns: The scan_id of the most recent completed scan, or None.
+    :returns: The source_repository string, or None if not found.
     """
-    resp = client.get("/scans", params={"limit": 50})
-    scans = resp.get("scans", resp.get("items", []))
-    for scan in scans:
-        if scan.get("asset_id") == asset_id and scan.get("status") == "completed":
-            return scan["scan_id"]
+    account_id = client.get_account_id()
+    resp = client.get(f"/account/{account_id}/assets", params={"limit": 100})
+    for asset in resp.get("items", []):
+        if asset.get("asset_id") == asset_id:
+            return asset.get("external_ref", "")
     return None
 
 
