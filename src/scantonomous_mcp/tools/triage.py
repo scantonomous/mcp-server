@@ -16,16 +16,20 @@ def triage_finding(
     ai_model: str,
     finding_id: str | None = None,
     finding_ids: list[str] | None = None,
+    ecd: str | None = None,
 ) -> dict[str, Any]:
     """Record a triage decision on one or more findings.
 
     Supply either ``finding_id`` (single) or ``finding_ids`` (batch, up to 25).
 
-    :param state: New state: ``fixed``, ``false_positive``, or ``accepted_risk``.
+    :param state: New state: ``fixed``, ``false_positive``, ``accepted_risk``,
+        ``will_fix``, or ``duplicate``.
     :param reason: Explanation for the decision.
     :param ai_model: The AI model performing the triage (e.g. "Claude Opus 4.6").
     :param finding_id: A single finding ID to triage.
     :param finding_ids: A list of finding IDs to triage with the same state/reason.
+    :param ecd: Expected completion date (YYYY-MM-DD). Required when state is
+        ``will_fix``. Must be a future date within the severity-based SLA limit.
     :returns: For single: the updated finding state. For batch: a summary with
         succeeded/failed counts and per-finding results.
     """
@@ -37,6 +41,8 @@ def triage_finding(
         "source": "mcp",
         "ai_model": ai_model,
     }
+    if ecd:
+        body["ecd"] = ecd
 
     if len(ids) == 1:
         return client.patch(f"/findings/{ids[0]}/state", body=body)

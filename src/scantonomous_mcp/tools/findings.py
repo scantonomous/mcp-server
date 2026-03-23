@@ -19,8 +19,9 @@ def list_findings(
     """Search and filter security findings.
 
     :param severity: Filter by severity (critical, high, medium, low, info).
-    :param state: Filter by state (new, fixed, false_positive, accepted_risk).
-        Defaults to ``new`` to show unresolved findings first.
+    :param state: Filter by state (untriaged, fixed, false_positive, accepted_risk,
+        will_fix, duplicate, reopened). Defaults to ``untriaged`` to show
+        unresolved findings first.
     :param query: Free-text search query.
     :param scan_id: Filter to findings from a specific scan.
     :param asset_id: Filter to findings for this asset/repository. Resolves
@@ -41,7 +42,7 @@ def list_findings(
     if state:
         params["state"] = state
     elif not scan_id:
-        params["state"] = "new"
+        params["state"] = "untriaged"
     if query:
         params["query"] = query
     if source_repository:
