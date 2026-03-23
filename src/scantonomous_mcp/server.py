@@ -334,10 +334,6 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                     },
                     "required": ["state", "reason", "ai_model"],
-                    "oneOf": [
-                        {"required": ["finding_id"]},
-                        {"required": ["finding_ids"]},
-                    ],
                 },
             ),
             Tool(
