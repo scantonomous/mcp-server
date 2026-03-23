@@ -1,10 +1,17 @@
-"""Scan operation tools: list_assets, create_scan, get_scan."""
+"""Scan operation tools: list_assets, create_scan, get_scan, watch_scan."""
 
 from __future__ import annotations
 
+import asyncio
+import random
 from typing import Any
 
-from ..client import ScantonomousClient
+from ..client import ApiError, ScantonomousClient
+
+TERMINAL_STATUSES = {"completed", "failed", "canceled"}
+_POLL_BASE_SECONDS = 30
+_POLL_JITTER_SECONDS = 5
+_DEFAULT_TIMEOUT_MINUTES = 30
 
 
 def list_assets(
@@ -63,3 +70,49 @@ def get_scan(
     :returns: Scan object with id, status, timestamps, and finding counts.
     """
     return client.get(f"/scans/{scan_id}")
+
+
+async def watch_scan(
+    client: ScantonomousClient,
+    scan_id: str,
+    timeout_minutes: int = _DEFAULT_TIMEOUT_MINUTES,
+) -> dict[str, Any]:
+    """Poll a scan until it reaches a terminal status.
+
+    Checks every 25–35 seconds (30s base ± 5s jitter) until the scan
+    completes, fails, is canceled, or the timeout is reached.
+
+    :param scan_id: The scan ID to watch.
+    :param timeout_minutes: Maximum time to wait in minutes (default 30).
+    :returns: Final scan object with status, timestamps, and finding counts.
+    """
+    timeout_seconds = timeout_minutes * 60
+    elapsed = 0.0
+
+    while elapsed < timeout_seconds:
+        try:
+            scan = client.get(f"/scans/{scan_id}")
+        except ApiError:
+            raise
+
+        status = scan.get("status", "")
+        if status in TERMINAL_STATUSES:
+            return scan
+
+        delay = _POLL_BASE_SECONDS + random.uniform(  # noqa: S311
+            -_POLL_JITTER_SECONDS, _POLL_JITTER_SECONDS
+        )
+        remaining = timeout_seconds - elapsed
+        delay = min(delay, remaining)
+        if delay <= 0:
+            break
+
+        await asyncio.sleep(delay)
+        elapsed += delay
+
+    return {
+        "status": "timeout",
+        "message": f"Scan did not complete within {timeout_minutes} minutes.",
+        "last_known_status": scan.get("status", "unknown"),  # type: ignore[possibly-undefined]
+        "scan_id": scan_id,
+    }

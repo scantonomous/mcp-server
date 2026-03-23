@@ -113,6 +113,30 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 },
             ),
             Tool(
+                name="watch_scan",
+                description=(
+                    "Wait for a scan to complete by polling every ~30 seconds. "
+                    "Returns the final scan result once it reaches a terminal status "
+                    "(completed, failed, or canceled). Use this after create_scan "
+                    "to wait for results instead of polling manually."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "scan_id": {
+                            "type": "string",
+                            "description": "The scan ID to watch.",
+                        },
+                        "timeout_minutes": {
+                            "type": "integer",
+                            "description": "Maximum time to wait in minutes (default 30).",
+                            "default": 30,
+                        },
+                    },
+                    "required": ["scan_id"],
+                },
+            ),
+            Tool(
                 name="create_ai_scan",
                 description=(
                     "Create a quick AI-powered security scan. Faster than a full scan "
@@ -138,6 +162,30 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         "ai_scan_id": {
                             "type": "string",
                             "description": "The AI scan ID.",
+                        },
+                    },
+                    "required": ["ai_scan_id"],
+                },
+            ),
+            Tool(
+                name="watch_ai_scan",
+                description=(
+                    "Wait for an AI scan to complete by polling every ~30 seconds. "
+                    "Returns the final AI scan result once it reaches a terminal status "
+                    "(completed, completed_partial, or failed). Use this after create_ai_scan "
+                    "to wait for results instead of polling manually."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "ai_scan_id": {
+                            "type": "string",
+                            "description": "The AI scan ID to watch.",
+                        },
+                        "timeout_minutes": {
+                            "type": "integer",
+                            "description": "Maximum time to wait in minutes (default 30).",
+                            "default": 30,
                         },
                     },
                     "required": ["ai_scan_id"],
@@ -312,7 +360,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
         args = arguments or {}
 
         try:
-            result = _dispatch_tool(api, name, args)
+            result = await _dispatch_tool(api, name, args)
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         except AuthError as e:
             return [
@@ -327,7 +375,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
     return server
 
 
-def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
+async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
     """Route a tool call to the appropriate handler."""
     match name:
         case "list_assets":
@@ -336,10 +384,22 @@ def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
             return scans.create_scan(api, asset_id=args["asset_id"], ref=args.get("ref"))
         case "get_scan":
             return scans.get_scan(api, scan_id=args["scan_id"])
+        case "watch_scan":
+            return await scans.watch_scan(
+                api,
+                scan_id=args["scan_id"],
+                timeout_minutes=args.get("timeout_minutes", 30),
+            )
         case "create_ai_scan":
             return ai_scans.create_ai_scan(api, asset_ids=args.get("asset_ids"))
         case "get_ai_scan_report":
             return ai_scans.get_ai_scan_report(api, ai_scan_id=args["ai_scan_id"])
+        case "watch_ai_scan":
+            return await ai_scans.watch_ai_scan(
+                api,
+                ai_scan_id=args["ai_scan_id"],
+                timeout_minutes=args.get("timeout_minutes", 30),
+            )
         case "list_findings":
             return findings.list_findings(
                 api,
