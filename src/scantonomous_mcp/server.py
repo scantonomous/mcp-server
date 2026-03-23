@@ -44,7 +44,9 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
             "6. If false positive: triage_finding with state=false_positive and explain why\n"
             "7. If accepted risk: triage_finding with state=accepted_risk with justification\n"
-            "8. When multiple findings share the same triage outcome, use finding_ids to "
+            "8. If will fix later: triage_finding with state=will_fix, ecd=YYYY-MM-DD, "
+            "and reason explaining the plan\n"
+            "9. When multiple findings share the same triage outcome, use finding_ids to "
             "batch-triage up to 25 at once\n\n"
             "Prioritize critical and high severity findings first."
         ),
@@ -144,7 +146,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="list_findings",
                 description=(
-                    "Search and filter security findings. Defaults to showing unresolved (new) findings. "
+                    "Search and filter security findings. Defaults to showing unresolved (untriaged) findings. "
                     "Use severity and state filters to narrow results. Use asset_id to get findings "
                     "from the most recent completed scan of a specific repository."
                 ),
@@ -158,8 +160,16 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "state": {
                             "type": "string",
-                            "enum": ["new", "fixed", "false_positive", "accepted_risk"],
-                            "description": "Filter by triage state. Defaults to 'new'.",
+                            "enum": [
+                                "untriaged",
+                                "fixed",
+                                "false_positive",
+                                "accepted_risk",
+                                "will_fix",
+                                "duplicate",
+                                "reopened",
+                            ],
+                            "description": "Filter by triage state. Defaults to 'untriaged'.",
                         },
                         "query": {
                             "type": "string",
@@ -220,9 +230,9 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="triage_finding",
                 description=(
                     "Record a triage decision on one or more findings. Mark as fixed (after applying "
-                    "a fix), false_positive (with explanation), or accepted_risk (with compensating "
-                    "controls). Use finding_ids to batch-triage up to 25 findings with the same "
-                    "state and reason in one call."
+                    "a fix), false_positive (with explanation), accepted_risk (with compensating "
+                    "controls), will_fix (with ecd date), or duplicate. Use finding_ids to "
+                    "batch-triage up to 25 findings with the same state and reason in one call."
                 ),
                 inputSchema={
                     "type": "object",
@@ -242,8 +252,22 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "state": {
                             "type": "string",
-                            "enum": ["fixed", "false_positive", "accepted_risk"],
+                            "enum": [
+                                "fixed",
+                                "false_positive",
+                                "accepted_risk",
+                                "will_fix",
+                                "duplicate",
+                            ],
                             "description": "The triage decision.",
+                        },
+                        "ecd": {
+                            "type": "string",
+                            "description": (
+                                "Expected completion date (YYYY-MM-DD). Required when "
+                                "state is 'will_fix'. Must be a future date within the "
+                                "severity-based SLA limit (critical: 21 days, high: 60 days)."
+                            ),
                         },
                         "reason": {
                             "type": "string",
@@ -338,6 +362,7 @@ def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict:
                 ai_model=args["ai_model"],
                 finding_id=args.get("finding_id"),
                 finding_ids=args.get("finding_ids"),
+                ecd=args.get("ecd"),
             )
         case "get_findings_summary":
             return triage.get_findings_summary(api, scan_id=args.get("scan_id"))
