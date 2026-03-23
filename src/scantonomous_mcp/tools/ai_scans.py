@@ -70,7 +70,7 @@ async def watch_ai_scan(
         if status in _AI_TERMINAL_STATUSES:
             return scan
 
-        delay = _POLL_BASE_SECONDS + random.uniform(  # noqa: S311
+        delay = _POLL_BASE_SECONDS + random.uniform(  # noqa: S311  # nosec B311
             -_POLL_JITTER_SECONDS, _POLL_JITTER_SECONDS
         )
         remaining = timeout_seconds - elapsed
