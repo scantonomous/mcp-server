@@ -4,7 +4,7 @@ MCP (Model Context Protocol) server that connects AI agents to the Scantonomous 
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.13+
 - A Scantonomous account on the target stage (dev, beta, prod)
 
 ## Installation
@@ -157,17 +157,17 @@ The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 ## Development
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync
 git config core.hooksPath .githooks
 ```
 
 ### Invoke Targets
 
 ```bash
-invoke test           # ruff check + ruff format --check + pyright
-invoke release        # test (pre-publish gate)
-invoke clean          # remove caches and build artifacts
-invoke publish --version=X.Y.Z  # bump version, build wheel, create GitHub Release
+uv run inv lint          # ruff check + ruff format --check + pyright
+uv run inv security      # pinstack + bandit + pip-audit + detect-secrets
+uv run inv test          # pytest
+uv run inv build         # clean + lint + security + test (full CI gate)
+uv run inv clean         # remove caches and build artifacts
+uv run inv publish --version=X.Y.Z  # bump version, build wheel, create GitHub Release
 ```
