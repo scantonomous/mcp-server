@@ -38,12 +38,17 @@ AI Agent (Claude Code, Codex, etc.)
               └── Cognito OAuth 2.0 (auth)
 ```
 
-- **services** (`/Users/trevortonn/scantonomous/code/services/`) — the backend REST
+- **services** (`../services/`) — the backend REST
   API that this MCP server calls. All API endpoints live there.
-- **orchestrator** (`/Users/trevortonn/scantonomous/code/orchestrator/`) — scan
+- **orchestrator** (`../orchestrator/`) — scan
   execution pipeline (Step Functions, ECS Fargate). Not called directly by this repo.
-- **common** (`/Users/trevortonn/scantonomous/code/common/`) — shared Python utils
+- **common** (`../common/`) — shared Python utils
   (`scntnms-utils`). Not a dependency of this repo.
+
+For the full platform architecture and operational runbooks, see the **documentation**
+repo (`../documentation/`):
+- `architecture.md` — system design, service boundaries, data flow
+- `operations.md` — deployment, monitoring, incident response
 
 ### Auth flow
 
