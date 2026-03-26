@@ -47,10 +47,31 @@ def lint(ctx: Context) -> None:
 
 @task
 def security(ctx: Context) -> None:
-    """Run security and supply-chain checks: pip-audit, bandit, detect-secrets, pinstack."""
+    """Run security and supply-chain checks: pinstack, bandit, pip-audit, detect-secrets.
+
+    pip-audit targets ONLY runtime dependencies ([project].dependencies), not the
+    build-chain ([dependency-groups].build). This is intentional:
+
+    - Runtime deps ship to users and must be vulnerability-free.
+    - Build-chain deps (pytest, ruff, pyright, etc.) pull in large transitive trees
+      (e.g., pytest → pygments) that may have CVEs irrelevant to production. Auditing
+      them creates false positives that block builds for no security benefit.
+
+    We use `uv export --no-dev` to produce a hashed requirements file containing only
+    runtime deps and their transitive closure, then feed that to pip-audit. This keeps
+    uv.lock as the single source of truth for dependency resolution.
+    """
     ctx.run("pinstack .", pty=True)
     ctx.run("bandit -r src/ -q", pty=True)
-    ctx.run("pip-audit", pty=True)
+    # Export runtime-only deps from uv.lock (excludes build-chain dependency group).
+    # --no-emit-project excludes the editable self-reference (pip-audit can't hash it).
+    # The exported file includes hashes, so pip-audit can verify integrity too.
+    ctx.run(
+        "uv export --no-dev --no-emit-project --format requirements-txt"
+        " -o /tmp/runtime-deps.txt",
+        pty=True,
+    )
+    ctx.run("pip-audit --desc --require-hashes -r /tmp/runtime-deps.txt", pty=True)
     ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
     ctx.run("detect-secrets audit --report .secrets.baseline", pty=True)
 

@@ -19,7 +19,7 @@ dependencies = [
 scantonomous-mcp = "scantonomous_mcp.cli:main"
 
 [dependency-groups]
-dev = [
+build = [
     "invoke==2.2.1",
     "pytest==9.0.2",
     "ruff==0.15.6",
@@ -27,7 +27,7 @@ dev = [
     "bandit==1.9.4",
     "pip-audit==2.10.0",
     "detect-secrets==1.5.0",
-    "pinstack==0.1.1",
+    "pinstack==0.1.5",
 ]
 
 [tool.hatch.build.targets.wheel]
