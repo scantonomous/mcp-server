@@ -147,8 +147,9 @@ def publish(ctx: Context, version: str = "") -> None:
     ctx.run(f'git commit -m "release: v{version}"')
     ctx.run(f"git tag v{version}")
 
-    # Build wheel
-    ctx.run("uv build", pty=True)
+    # Build wheel — --no-build-isolation uses hatchling from the synced venv
+    # (hash-verified via uv.lock) instead of fetching it from PyPI unverified.
+    ctx.run("uv build --no-build-isolation", pty=True)
 
     # Push commit and tag
     ctx.run("git push origin main")
