@@ -79,6 +79,9 @@ def security(ctx: Context) -> None:
 @task
 def test(ctx: Context) -> None:
     """Run unit tests."""
+    if not os.path.isdir("tests"):
+        print("  no tests/ directory — skipping")
+        return
     ctx.run("python -m pytest tests/ -v", pty=True)
 
 
