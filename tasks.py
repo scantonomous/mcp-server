@@ -66,12 +66,18 @@ def security(ctx: Context) -> None:
     # Export runtime-only deps from uv.lock (excludes build-chain dependency group).
     # --no-emit-project excludes the editable self-reference (pip-audit can't hash it).
     # The exported file includes hashes, so pip-audit can verify integrity too.
+    # --disable-pip tells pip-audit to skip creating an isolated venv and upgrading pip,
+    # which avoids network dependencies and the brittle pip bootstrap step. This flag
+    # requires hashed input (which uv export provides).
     ctx.run(
         "uv export --no-dev --no-emit-project --format requirements-txt"
         " -o /tmp/runtime-deps.txt",
         pty=True,
     )
-    ctx.run("pip-audit --desc --require-hashes -r /tmp/runtime-deps.txt", pty=True)
+    ctx.run(
+        "pip-audit --desc --require-hashes --disable-pip -r /tmp/runtime-deps.txt",
+        pty=True,
+    )
     ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
     ctx.run("detect-secrets audit --report .secrets.baseline", pty=True)
 

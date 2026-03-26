@@ -17,7 +17,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 echo "Installing runtime + build-chain deps (hash-verified from uv.lock)..."
-uv sync --group build
+uv sync --locked --group build
 
 echo "Configuring git hooks..."
 git config core.hooksPath .githooks

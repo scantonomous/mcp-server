@@ -99,7 +99,7 @@ All deps use strict `==` pinning. `uv.lock` contains hashes for every package.
 ./scripts/dev-setup.sh
 ```
 
-This runs `uv sync --group build` (installs runtime + build-chain deps, hash-verified
+This runs `uv sync --locked --group build` (installs runtime + build-chain deps, hash-verified
 from `uv.lock`) and configures git hooks. No manual venv creation or activation needed.
 
 ## Build & Test
