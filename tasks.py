@@ -57,13 +57,14 @@ def security(ctx: Context) -> None:
       (e.g., pytest → pygments) that may have CVEs irrelevant to production. Auditing
       them creates false positives that block builds for no security benefit.
 
-    We use `uv export --no-dev` to produce a hashed requirements file containing only
-    runtime deps and their transitive closure, then feed that to pip-audit. This keeps
-    uv.lock as the single source of truth for dependency resolution.
+    pip-audit cannot read uv.lock directly — it only understands requirements files or
+    installed environments. We export runtime deps to a requirements file via
+    `uv export --no-dev` as a workaround. This keeps uv.lock as the single source of
+    truth for dependency resolution.
     """
     ctx.run("pinstack .", pty=True)
     ctx.run("bandit -r src/ -q", pty=True)
-    # Export runtime-only deps from uv.lock (excludes build-chain dependency group).
+    # pip-audit can't read uv.lock, so we export runtime-only deps to a requirements file it can consume.
     # --no-emit-project excludes the editable self-reference (pip-audit can't hash it).
     # The exported file includes hashes, so pip-audit can verify integrity too.
     # --disable-pip tells pip-audit to skip creating an isolated venv and upgrading pip,
@@ -71,11 +72,11 @@ def security(ctx: Context) -> None:
     # requires hashed input (which uv export provides).
     ctx.run(
         "uv export --no-dev --no-emit-project --format requirements-txt"
-        " -o /tmp/runtime-deps.txt",
+        " -o .runtime-deps.txt",
         pty=True,
     )
     ctx.run(
-        "pip-audit --desc --require-hashes --disable-pip -r /tmp/runtime-deps.txt",
+        "pip-audit --desc --require-hashes --disable-pip -r .runtime-deps.txt",
         pty=True,
     )
     ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
