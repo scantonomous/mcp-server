@@ -39,6 +39,7 @@ def clean(ctx: Context) -> None:
 @task
 def build(ctx: Context) -> None:
     """Run lint, format check, and type check."""
+    ctx.run("pinstack .", pty=True)
     ctx.run("ruff check src/", pty=True)
     ctx.run("ruff format --check src/", pty=True)
     ctx.run("pyright src/", pty=True)
