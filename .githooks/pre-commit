@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: block main commits, lint, and format-check.
+# Pre-commit hook: block main commits, run full build.
 
 set -e
 
@@ -10,20 +10,11 @@ if [ "$branch" = "main" ]; then
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-VENV="$REPO_ROOT/.venv/bin/activate"
 
-if [ ! -f "$VENV" ]; then
-  echo "ERROR: .venv not found. Run: python3 -m venv .venv && pip install -e '.[dev]'"
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv not found. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"
   exit 1
 fi
 
-# shellcheck disable=SC1090
-. "$VENV"
-
-echo "▸ ruff check..."
-ruff check src/
-
-echo "▸ ruff format --check..."
-ruff format --check src/
-
-echo "✓ pre-commit passed"
+cd "$REPO_ROOT"
+uv run inv build
