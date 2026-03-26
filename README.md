@@ -157,9 +157,13 @@ The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 ## Development
 
 ```bash
-uv sync
+uv sync --group build
 git config core.hooksPath .githooks
 ```
+
+`uv sync --group build` creates a `.venv`, installs runtime deps and build-chain tools
+(pytest, ruff, pyright, bandit, etc.), all hash-verified from `uv.lock`. No manual venv
+creation or activation needed — `uv run` handles it transparently.
 
 ### Invoke Targets
 
