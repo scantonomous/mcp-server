@@ -1,6 +1,7 @@
 """Invoke task definitions for the mcp-server package.
 
-Standard targets: test, release, clean, publish.
+Standard targets: clean, lint, security, test, build, release, publish.
+All tools are invoked via the project venv (use `uv run inv <task>`).
 """
 
 import glob
@@ -37,12 +38,17 @@ def clean(ctx: Context) -> None:
 
 
 @task
-def build(ctx: Context) -> None:
-    """Run lint, format check, and type check."""
-    ctx.run("pinstack .", pty=True)
+def lint(ctx: Context) -> None:
+    """Run code quality checks: ruff lint, ruff format, pyright."""
     ctx.run("ruff check src/", pty=True)
     ctx.run("ruff format --check src/", pty=True)
     ctx.run("pyright src/", pty=True)
+
+
+@task
+def security(ctx: Context) -> None:
+    """Run security and supply-chain checks: pip-audit, bandit, detect-secrets, pinstack."""
+    ctx.run("pinstack .", pty=True)
     ctx.run("bandit -r src/ -q", pty=True)
     ctx.run("pip-audit", pty=True)
     ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
@@ -55,7 +61,13 @@ def test(ctx: Context) -> None:
     ctx.run("python -m pytest tests/ -v", pty=True)
 
 
-@task(pre=[build, test])
+@task(pre=[clean, lint, security, test])
+def build(ctx: Context) -> None:
+    """Full local CI gate: clean + lint + security + test."""
+    print("  build passed")
+
+
+@task(pre=[build])
 def release(ctx: Context) -> None:
     """Full pre-publish validation."""
     print("  release checks passed")
@@ -65,7 +77,7 @@ def release(ctx: Context) -> None:
 def publish(ctx: Context, version: str = "") -> None:
     """Bump version, build, and create a GitHub Release.
 
-    Usage: invoke publish --version=0.2.0
+    Usage: uv run inv publish --version=0.2.0
     """
     if not version:
         raise ValueError("--version is required (e.g., --version=0.2.0)")
@@ -106,7 +118,7 @@ def publish(ctx: Context, version: str = "") -> None:
     ctx.run(f"git tag v{version}")
 
     # Build wheel
-    ctx.run("python -m build", pty=True)
+    ctx.run("uv build", pty=True)
 
     # Push commit and tag
     ctx.run("git push origin main")
