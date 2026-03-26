@@ -1,6 +1,7 @@
 """Invoke task definitions for the mcp-server package.
 
-Standard targets: test, release, clean, publish.
+Standard targets: clean, lint, security, test, build, release, publish.
+All tools are invoked via the project venv (use `uv run inv <task>`).
 """
 
 import glob
@@ -37,14 +38,46 @@ def clean(ctx: Context) -> None:
 
 
 @task
-def build(ctx: Context) -> None:
-    """Run lint, format check, and type check."""
-    ctx.run("pinstack .", pty=True)
+def lint(ctx: Context) -> None:
+    """Run code quality checks: ruff lint, ruff format, pyright."""
     ctx.run("ruff check src/", pty=True)
     ctx.run("ruff format --check src/", pty=True)
     ctx.run("pyright src/", pty=True)
+
+
+@task
+def security(ctx: Context) -> None:
+    """Run security and supply-chain checks: pinstack, bandit, pip-audit, detect-secrets.
+
+    pip-audit targets ONLY runtime dependencies ([project].dependencies), not the
+    build-chain ([dependency-groups].build). This is intentional:
+
+    - Runtime deps ship to users and must be vulnerability-free.
+    - Build-chain deps (pytest, ruff, pyright, etc.) pull in large transitive trees
+      (e.g., pytest → pygments) that may have CVEs irrelevant to production. Auditing
+      them creates false positives that block builds for no security benefit.
+
+    We use `uv export --no-dev` to produce a hashed requirements file containing only
+    runtime deps and their transitive closure, then feed that to pip-audit. This keeps
+    uv.lock as the single source of truth for dependency resolution.
+    """
+    ctx.run("pinstack .", pty=True)
     ctx.run("bandit -r src/ -q", pty=True)
-    ctx.run("pip-audit", pty=True)
+    # Export runtime-only deps from uv.lock (excludes build-chain dependency group).
+    # --no-emit-project excludes the editable self-reference (pip-audit can't hash it).
+    # The exported file includes hashes, so pip-audit can verify integrity too.
+    # --disable-pip tells pip-audit to skip creating an isolated venv and upgrading pip,
+    # which avoids network dependencies and the brittle pip bootstrap step. This flag
+    # requires hashed input (which uv export provides).
+    ctx.run(
+        "uv export --no-dev --no-emit-project --format requirements-txt"
+        " -o /tmp/runtime-deps.txt",
+        pty=True,
+    )
+    ctx.run(
+        "pip-audit --desc --require-hashes --disable-pip -r /tmp/runtime-deps.txt",
+        pty=True,
+    )
     ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
     ctx.run("detect-secrets audit --report .secrets.baseline", pty=True)
 
@@ -52,10 +85,19 @@ def build(ctx: Context) -> None:
 @task
 def test(ctx: Context) -> None:
     """Run unit tests."""
+    if not os.path.isdir("tests"):
+        print("  no tests/ directory — skipping")
+        return
     ctx.run("python -m pytest tests/ -v", pty=True)
 
 
-@task(pre=[build, test])
+@task(pre=[clean, lint, security, test])
+def build(ctx: Context) -> None:
+    """Full local CI gate: clean + lint + security + test."""
+    print("  build passed")
+
+
+@task(pre=[build])
 def release(ctx: Context) -> None:
     """Full pre-publish validation."""
     print("  release checks passed")
@@ -65,7 +107,7 @@ def release(ctx: Context) -> None:
 def publish(ctx: Context, version: str = "") -> None:
     """Bump version, build, and create a GitHub Release.
 
-    Usage: invoke publish --version=0.2.0
+    Usage: uv run inv publish --version=0.2.0
     """
     if not version:
         raise ValueError("--version is required (e.g., --version=0.2.0)")
@@ -106,7 +148,7 @@ def publish(ctx: Context, version: str = "") -> None:
     ctx.run(f"git tag v{version}")
 
     # Build wheel
-    ctx.run("python -m build", pty=True)
+    ctx.run("uv build", pty=True)
 
     # Push commit and tag
     ctx.run("git push origin main")

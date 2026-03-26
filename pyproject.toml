@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "scantonomous-mcp"
 version = "0.1.0"
 description = "Scantonomous MCP server for AI agent integration"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
     "mcp==1.26.0",
@@ -15,27 +15,27 @@ dependencies = [
     "click==8.3.1",
 ]
 
-[project.optional-dependencies]
-dev = [
+[project.scripts]
+scantonomous-mcp = "scantonomous_mcp.cli:main"
+
+[dependency-groups]
+build = [
     "invoke==2.2.1",
+    "pytest==9.0.2",
     "ruff==0.15.6",
     "pyright==1.1.408",
     "bandit==1.9.4",
     "pip-audit==2.10.0",
     "detect-secrets==1.5.0",
-    "build==1.4.0",
-    "pinstack==0.1.1",
+    "pinstack==0.1.5",
 ]
-
-[project.scripts]
-scantonomous-mcp = "scantonomous_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scantonomous_mcp"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "BLE", "S", "SLF", "T20", "PLC", "PLE", "PLW"]
@@ -45,5 +45,8 @@ ignore = ["S603", "S607", "E501", "PLC0415"]
 "tasks.py" = ["ARG001", "S605", "T201"]
 
 [tool.pyright]
-pythonVersion = "3.11"
+pythonVersion = "3.13"
 typeCheckingMode = "basic"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
