@@ -13,7 +13,7 @@ from .auth import AuthError, AuthManager, get_default_client_id
 
 
 @click.group()
-@click.option("--stage", default="dev", help="Deployment stage (dev, beta, prod).")
+@click.option("--stage", default="prod", help="Deployment stage (dev, beta, prod).")
 @click.option(
     "--client-id",
     envvar="SCANTONOMOUS_MCP_CLIENT_ID",
