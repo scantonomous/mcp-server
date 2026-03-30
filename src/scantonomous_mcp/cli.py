@@ -5,11 +5,41 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
+import subprocess  # nosec B404 — used for pgrep with hardcoded args only
 import sys
 
 import click
 
 from .auth import AuthError, AuthManager, get_default_client_id
+
+
+def _kill_stale_servers() -> int:
+    """Kill any running ``scantonomous-mcp serve`` processes except ourselves.
+
+    :returns: Number of processes killed.
+    """
+    my_pid = os.getpid()
+    killed = 0
+    try:
+        result = subprocess.run(  # nosec B603 B607 — hardcoded command, no user input
+            ["pgrep", "-f", "scantonomous-mcp.*serve"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for line in result.stdout.strip().splitlines():
+            pid = int(line.strip())
+            if pid == my_pid:
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+    except FileNotFoundError:
+        pass  # pgrep not available (Windows)
+    return killed
 
 
 @click.group()
@@ -37,6 +67,9 @@ def main(ctx: click.Context, stage: str, client_id: str | None, verbose: bool) -
 @click.pass_context
 def login(ctx: click.Context) -> None:
     """Authenticate via browser-based OAuth flow."""
+    killed = _kill_stale_servers()
+    if killed:
+        click.echo(f"Stopped {killed} running MCP server process(es).", err=True)
     client_id = _require_client_id(ctx)
     stage = ctx.obj["stage"]
 
@@ -110,6 +143,9 @@ def init(ctx: click.Context, is_local: bool) -> None:
     can discover and use Scantonomous tools automatically. Writes to
     the global config (~/.claude.json) by default.
     """
+    killed = _kill_stale_servers()
+    if killed:
+        click.echo(f"Stopped {killed} running MCP server process(es).", err=True)
     _require_client_id(ctx)
     stage = ctx.obj["stage"]
 
