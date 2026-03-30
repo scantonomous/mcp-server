@@ -205,7 +205,7 @@ class AuthManager:
                 "code_challenge_method": "S256",
             }
         )
-        authorize_url = f"https://{self.cognito_domain}/oauth2/authorize?{auth_params}"
+        authorize_url = f"https://{self.web_domain}/authorize?{auth_params}"
 
         logger.info("Opening browser for authorization...")
         webbrowser.open(authorize_url)
