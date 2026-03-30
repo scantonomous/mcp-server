@@ -72,7 +72,7 @@ STAGE_CONFIGS: dict[str, dict[str, str]] = {
         "region": "us-west-2",
     },
     "prod": {
-        "client_id": "",  # Set after prod deploy
+        "client_id": "2t0dt9q9mfcff1e2qk9eussrfq",
         "cognito_domain": "auth.scantonomous.ai",
         "api_base_url": "https://api.scantonomous.ai/v1",
         "web_domain": "app.scantonomous.ai",
