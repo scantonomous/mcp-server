@@ -270,7 +270,9 @@ class AuthManager:
     def _load_keychain_config(self) -> dict[str, str] | None:
         """Load stored config from keychain.
 
-        Returns None if the keyring backend is insecure.
+        Returns None if the keyring backend is insecure or if the stored
+        config belongs to a different stage (e.g. dev tokens after the
+        default changed to prod).
         """
         if not _keyring_is_secure():
             return None
@@ -278,9 +280,18 @@ class AuthManager:
         if not raw:
             return None
         try:
-            return json.loads(raw)
+            data = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return None
+        stored_stage = data.get("stage", "")
+        if stored_stage and stored_stage != self.stage:
+            logger.info(
+                "Ignoring stored tokens for stage '%s' (current stage: '%s')",
+                stored_stage,
+                self.stage,
+            )
+            return None
+        return data
 
     def _exchange_code(self, code: str, redirect_uri: str, code_verifier: str) -> TokenSet:
         """Exchange authorization code for tokens via Cognito /oauth2/token.
