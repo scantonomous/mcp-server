@@ -1,7 +1,10 @@
 """Invoke task definitions for the mcp-server package.
 
-Standard targets: clean, lint, security, test, build, release, publish.
+Standard targets: clean, lint, security, test, build, release.
 All tools are invoked via the project venv (use `uv run inv <task>`).
+
+Publishing (tag, wheel, GitHub Release) is handled by the publish GitHub
+Actions workflow, triggered automatically when a release PR merges to main.
 """
 
 import glob
@@ -99,22 +102,25 @@ def build(ctx: Context) -> None:
 
 
 @task(pre=[build])
-def release(ctx: Context) -> None:
-    """Full pre-publish validation."""
-    print("  release checks passed")
+def release(ctx: Context, version: str = "") -> None:
+    """Create a release PR: bump version, commit to release branch, open PR.
 
+    After the PR is merged to main, the publish workflow (GitHub Actions)
+    automatically tags, builds a wheel, and creates a GitHub Release.
 
-@task(pre=[release])
-def publish(ctx: Context, version: str = "") -> None:
-    """Bump version, build, and create a GitHub Release.
-
-    Usage: uv run inv publish --version=0.2.0
+    Usage: uv run inv release --version=0.2.7
     """
     if not version:
-        raise ValueError("--version is required (e.g., --version=0.2.0)")
+        raise ValueError("--version is required (e.g., --version=0.2.7)")
 
     if not re.match(r"^\d+\.\d+\.\d+$", version):
         raise ValueError(f"Invalid version format: {version} (expected X.Y.Z)")
+
+    branch = f"release/v{version}"
+
+    # Create release branch from origin/main
+    ctx.run("git fetch origin main", pty=True)
+    ctx.run(f"git checkout -b {branch} origin/main", pty=True)
 
     # Bump version in pyproject.toml
     pyproject_path = "pyproject.toml"
@@ -141,31 +147,20 @@ def publish(ctx: Context, version: str = "") -> None:
     with open(init_path, "w") as f:
         f.write(content)
 
-    print(f"  bumped version to {version}")
-
     # Sync lockfile so uv.lock reflects the new version
     ctx.run("uv lock")
 
-    # Commit and tag
+    print(f"  bumped version to {version}")
+
+    # Commit, push, and create PR
     ctx.run(f"git add {pyproject_path} {init_path} uv.lock")
     ctx.run(f'git commit -m "release: v{version}"')
-    ctx.run(f"git tag v{version}")
-
-    # Build wheel — --no-build-isolation uses hatchling from the synced venv
-    # (hash-verified via uv.lock) instead of fetching it from PyPI unverified.
-    ctx.run("uv build --no-build-isolation", pty=True)
-
-    # Push commit and tag
-    ctx.run("git push origin main")
-    ctx.run(f"git push origin v{version}")
-
-    # Create GitHub Release with wheel
-    wheel_path = glob.glob(f"dist/scantonomous_mcp-{version}-*.whl")
-    if not wheel_path:
-        raise RuntimeError("wheel not found in dist/")
-
+    ctx.run(f"git push -u origin {branch}", pty=True)
     ctx.run(
-        f'gh release create v{version} {wheel_path[0]} --title "v{version}" --generate-notes',
+        f'gh pr create --title "release: v{version}"'
+        f' --body "Bump version to {version}.'
+        f" Merging this PR will automatically tag, build, and publish the release."
+        f' \\n\\nSee publish workflow for details."',
         pty=True,
     )
-    print(f"  published v{version}")
+    print(f"  release PR created for v{version} — merge it to publish")
