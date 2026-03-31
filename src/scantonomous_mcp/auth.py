@@ -72,7 +72,7 @@ STAGE_CONFIGS: dict[str, dict[str, str]] = {
         "region": "us-west-2",
     },
     "prod": {
-        "client_id": "",  # Set after prod deploy
+        "client_id": "2t0dt9q9mfcff1e2qk9eussrfq",
         "cognito_domain": "auth.scantonomous.ai",
         "api_base_url": "https://api.scantonomous.ai/v1",
         "web_domain": "app.scantonomous.ai",
@@ -205,7 +205,7 @@ class AuthManager:
                 "code_challenge_method": "S256",
             }
         )
-        authorize_url = f"https://{self.cognito_domain}/oauth2/authorize?{auth_params}"
+        authorize_url = f"https://{self.web_domain}/authorize?{auth_params}"
 
         logger.info("Opening browser for authorization...")
         webbrowser.open(authorize_url)
@@ -270,7 +270,9 @@ class AuthManager:
     def _load_keychain_config(self) -> dict[str, str] | None:
         """Load stored config from keychain.
 
-        Returns None if the keyring backend is insecure.
+        Returns None if the keyring backend is insecure or if the stored
+        config belongs to a different stage (e.g. dev tokens after the
+        default changed to prod).
         """
         if not _keyring_is_secure():
             return None
@@ -278,9 +280,18 @@ class AuthManager:
         if not raw:
             return None
         try:
-            return json.loads(raw)
+            data = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
             return None
+        stored_stage = data.get("stage", "")
+        if stored_stage and stored_stage != self.stage:
+            logger.info(
+                "Ignoring stored tokens for stage '%s' (current stage: '%s')",
+                stored_stage,
+                self.stage,
+            )
+            return None
+        return data
 
     def _exchange_code(self, code: str, redirect_uri: str, code_verifier: str) -> TokenSet:
         """Exchange authorization code for tokens via Cognito /oauth2/token.
