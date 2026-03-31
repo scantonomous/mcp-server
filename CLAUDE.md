@@ -165,8 +165,12 @@ The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 ## Publishing a Release
 
 ```bash
-uv run inv publish --version=X.Y.Z
+uv run inv release --version=X.Y.Z
 ```
 
-This bumps the version in `pyproject.toml` and `__init__.py`, commits, tags, builds a
-wheel, pushes, and creates a GitHub Release. Runs the full build gate first.
+This creates a `release/vX.Y.Z` branch, bumps the version in `pyproject.toml` and
+`__init__.py`, syncs `uv.lock`, commits, pushes, and opens a PR. Runs the full build
+gate first.
+
+When the release PR is merged to `main`, the **publish** GitHub Actions workflow
+automatically tags the commit, builds a wheel, and creates a GitHub Release.
