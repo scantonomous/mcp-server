@@ -17,6 +17,7 @@ def triage_finding(
     finding_id: str | None = None,
     finding_ids: list[str] | None = None,
     ecd: str | None = None,
+    approval_reference: str | None = None,
 ) -> dict[str, Any]:
     """Record a triage decision on one or more findings.
 
@@ -29,7 +30,10 @@ def triage_finding(
     :param finding_id: A single finding ID to triage.
     :param finding_ids: A list of finding IDs to triage with the same state/reason.
     :param ecd: Expected completion date (YYYY-MM-DD). Required when state is
-        ``will_fix``. Must be a future date within the severity-based SLA limit.
+        ``will_fix`` (within severity SLA) or ``accepted_risk`` (mapped to
+        ``ecd_approved_until``, max 1 year).
+    :param approval_reference: URL or reference to the approval document. Required
+        when state is ``accepted_risk``. Max 2048 characters.
     :returns: For single: the updated finding state. For batch: a summary with
         succeeded/failed counts and per-finding results.
     """
@@ -46,6 +50,8 @@ def triage_finding(
             body["ecd_approved_until"] = ecd
         else:
             body["ecd"] = ecd
+    if approval_reference:
+        body["approval_reference"] = approval_reference
 
     if len(ids) == 1:
         return client.patch(f"/findings/{ids[0]}/state", body=body)
