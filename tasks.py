@@ -143,8 +143,11 @@ def publish(ctx: Context, version: str = "") -> None:
 
     print(f"  bumped version to {version}")
 
+    # Sync lockfile so uv.lock reflects the new version
+    ctx.run("uv lock")
+
     # Commit and tag
-    ctx.run(f"git add {pyproject_path} {init_path}")
+    ctx.run(f"git add {pyproject_path} {init_path} uv.lock")
     ctx.run(f'git commit -m "release: v{version}"')
     ctx.run(f"git tag v{version}")
 
