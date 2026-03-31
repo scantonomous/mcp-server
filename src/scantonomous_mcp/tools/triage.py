@@ -42,7 +42,7 @@ def triage_finding(
         "ai_model": ai_model,
     }
     if ecd:
-        body["ecd"] = ecd
+        body["ecd_approved_until"] = ecd
 
     if len(ids) == 1:
         return client.patch(f"/findings/{ids[0]}/state", body=body)
