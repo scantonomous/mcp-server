@@ -43,7 +43,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "4. Read the actual source file to verify\n"
             "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
             "6. If false positive: triage_finding with state=false_positive and explain why\n"
-            "7. If accepted risk: triage_finding with state=accepted_risk with justification\n"
+            "7. If accepted risk: triage_finding with state=accepted_risk, "
+            "approval_reference (URL/ticket), and ecd (expiry, max 1 year)\n"
             "8. If will fix later: triage_finding with state=will_fix, ecd=YYYY-MM-DD, "
             "and reason explaining the plan\n"
             "9. When multiple findings share the same triage outcome, use finding_ids to "
@@ -313,12 +314,25 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "type": "string",
                             "description": (
                                 "Expected completion date (YYYY-MM-DD). Required when "
-                                "state is 'will_fix'. Must be a future date within the "
-                                "severity-based SLA limit (critical: 21 days, high: 60 days)."
+                                "state is 'will_fix' (must be within severity-based SLA: "
+                                "critical 14 days, high 60 days). Also required when "
+                                "state is 'accepted_risk' (max 1 year), where it sets "
+                                "the risk-acceptance expiry date."
+                            ),
+                        },
+                        "approval_reference": {
+                            "type": "string",
+                            "maxLength": 2048,
+                            "description": (
+                                "URL or reference to the approval document/ticket. "
+                                "Required when state is 'accepted_risk'. Example: "
+                                "a Jira ticket URL, risk committee meeting notes link, "
+                                "or other formal approval reference."
                             ),
                         },
                         "reason": {
                             "type": "string",
+                            "maxLength": 1000,
                             "description": (
                                 "Explanation for the decision. Required for false_positive "
                                 "and accepted_risk. For fixed, describe the fix applied."
@@ -419,6 +433,7 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
                 finding_id=args.get("finding_id"),
                 finding_ids=args.get("finding_ids"),
                 ecd=args.get("ecd"),
+                approval_reference=args.get("approval_reference"),
             )
         case "get_findings_summary":
             return triage.get_findings_summary(api, scan_id=args.get("scan_id"))
