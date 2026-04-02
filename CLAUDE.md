@@ -123,6 +123,10 @@ The pre-commit hook runs `uv run inv build` — all checks must pass before comm
   exception type possible.
 - Use **Sphinx reST** docstrings (`:param:`, `:returns:`, `:raises:`).
 
+## Pre-Commit Checklist
+
+**NEVER use `--no-verify`.** Pre-commit hooks must always run. No exceptions.
+
 ## Git Workflow
 
 - **Never commit directly to `main`.** All work goes on a feature branch.
