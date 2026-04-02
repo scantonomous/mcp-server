@@ -21,13 +21,13 @@ class TestApiError:
 class TestScantonomousClient:
     def _make_client(self) -> ScantonomousClient:
         auth = MagicMock()
-        auth.api_base_url = "https://dev.scntnms.services/v1"
+        auth.api_base_url = "https://api.dev.scantonomous.ai/v1"
         auth.get_id_token.return_value = "fake-token"
         return ScantonomousClient(auth)
 
     def test_base_url_from_auth(self) -> None:
         client = self._make_client()
-        assert client.base_url == "https://dev.scntnms.services/v1"
+        assert client.base_url == "https://api.dev.scantonomous.ai/v1"
 
     def test_get_sends_auth_header(self) -> None:
         client = self._make_client()
