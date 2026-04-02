@@ -158,9 +158,9 @@ The `--stage` flag defaults to `dev`. Valid stages: `dev`, `beta`, `prod`.
 
 | Stage | API URL |
 |-------|---------|
-| dev   | `https://dev.scntnms.services/v1` |
-| beta  | `https://beta.scntnms.services/v1` |
-| prod  | `https://api.scntnms.services/v1` |
+| dev   | `https://api.dev.scantonomous.ai/v1` |
+| beta  | `https://api.beta.scantonomous.ai/v1` |
+| prod  | `https://api.scantonomous.ai/v1` |
 
 ## Publishing a Release
 
