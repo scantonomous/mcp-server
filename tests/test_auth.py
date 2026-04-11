@@ -451,6 +451,7 @@ def test_login_raises_on_provider_error(monkeypatch: pytest.MonkeyPatch) -> None
             return None
 
     monkeypatch.setattr(auth, "_CallbackServer", lambda _address, _handler: FakeCallbackServer())
+    monkeypatch.setattr(auth.webbrowser, "open", lambda _url: True)
 
     with pytest.raises(auth.AuthError, match="Authorization denied: access_denied"):
         manager.login()
@@ -470,6 +471,7 @@ def test_login_raises_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
             return None
 
     monkeypatch.setattr(auth, "_CallbackServer", lambda _address, _handler: FakeCallbackServer())
+    monkeypatch.setattr(auth.webbrowser, "open", lambda _url: True)
 
     with pytest.raises(auth.AuthError, match="Authorization timed out"):
         manager.login()
@@ -491,6 +493,7 @@ def test_login_raises_on_state_mismatch(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(auth.secrets, "token_urlsafe", lambda _size: "expected-state")
     monkeypatch.setattr(auth, "_generate_pkce", lambda: ("code-verifier", "code-challenge"))
     monkeypatch.setattr(auth, "_CallbackServer", lambda _address, _handler: FakeCallbackServer())
+    monkeypatch.setattr(auth.webbrowser, "open", lambda _url: True)
 
     with pytest.raises(auth.AuthError, match="State mismatch"):
         manager.login()
