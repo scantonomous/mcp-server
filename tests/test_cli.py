@@ -77,7 +77,7 @@ def test_kill_stale_servers_returns_zero_when_pgrep_is_missing(
     assert cli._kill_stale_servers() == 0
 
 
-def test_login_uses_default_dev_stage(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_login_uses_default_prod_stage(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = CliRunner()
     calls: dict[str, object] = {}
 
@@ -96,7 +96,7 @@ def test_login_uses_default_dev_stage(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert calls == {
-        "init": {"client_id": "dev-client", "stage": "dev"},
+        "init": {"client_id": "prod-client", "stage": "prod"},
         "login": True,
     }
     assert "Authenticated successfully." in result.output
@@ -199,7 +199,7 @@ def test_serve_creates_server_and_runs_stdio_transport(monkeypatch: pytest.Monke
 
     assert result.exit_code == 0
     assert captured == {
-        "create_server": {"client_id": "dev-client", "stage": "dev"},
+        "create_server": {"client_id": "prod-client", "stage": "prod"},
         "run": {
             "read_stream": "read-stream",
             "write_stream": "write-stream",
@@ -231,7 +231,7 @@ def test_init_writes_global_config_without_explicit_client_id(
             "existing": {"command": "existing", "args": ["serve"]},
             "scantonomous": {
                 "command": "scantonomous-mcp",
-                "args": ["--stage", "dev", "serve"],
+                "args": ["--stage", "prod", "serve"],
             },
         }
     }
