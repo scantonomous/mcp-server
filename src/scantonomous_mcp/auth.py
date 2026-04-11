@@ -158,7 +158,7 @@ class AuthManager:
             except AuthError:
                 logger.info("Refresh token expired, re-auth required")
 
-        raise AuthError("Not authenticated. Please run: scantonomous-mcp auth login")
+        raise AuthError("Not authenticated. Please run: scantonomous-mcp login")
 
     def get_id_token(self) -> str:
         """Return a valid ID token, refreshing if needed."""

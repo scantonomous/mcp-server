@@ -76,7 +76,7 @@ def _resolve_finding_ids(
     """Validate and return the list of finding IDs to triage."""
     if finding_id and finding_ids:
         raise ValueError("Provide either finding_id or finding_ids, not both.")
-    if finding_ids:
+    if finding_ids is not None:
         if len(finding_ids) > MAX_BATCH_SIZE:
             raise ValueError(f"finding_ids cannot exceed {MAX_BATCH_SIZE} items.")
         if len(finding_ids) == 0:
