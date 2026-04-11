@@ -376,7 +376,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             return [
                 TextContent(
                     type="text",
-                    text=f"Authentication required: {e}\n\nPlease ask the user to run: scantonomous-mcp auth login",
+                    text=f"Authentication required: {e}\n\nPlease ask the user to run: scantonomous-mcp login",
                 )
             ]
         except ApiError as e:

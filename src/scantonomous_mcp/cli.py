@@ -43,7 +43,7 @@ def _kill_stale_servers() -> int:
 
 
 @click.group()
-@click.option("--stage", default="prod", help="Deployment stage (dev, beta, prod).")
+@click.option("--stage", default="dev", help="Deployment stage (dev, beta, prod).")
 @click.option(
     "--client-id",
     envvar="SCANTONOMOUS_MCP_CLIENT_ID",
