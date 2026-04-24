@@ -156,7 +156,7 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "cover multiple repositories at once. Uses a multi-phase AI pipeline "
                     "(structural analysis, threat modeling, evidence gathering, AI judging) "
                     "rather than traditional scanners, so findings carry explicit confidence "
-                    "scores and chain-of-thought reasoning. Prefer this when you want "
+                    "scores. Prefer this when you want "
                     "cross-repo threat analysis or faster turnaround; prefer create_scan "
                     "when you need full scanner coverage (e.g. dependency CVEs, secrets)."
                 ),
