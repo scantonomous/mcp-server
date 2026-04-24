@@ -174,11 +174,15 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="get_ai_scan_report",
                 description=(
-                    "Get the executive summary report for an AI scan, including severity breakdown and key findings. "
-                    "AI scan findings have been through multi-phase AI validation (threat modeling, evidence gathering, "
-                    "and AI judging), so carry higher confidence than standard scan findings. "
-                    "Use get_finding on individual finding IDs from this report to get full details "
-                    "including confidence scores, evidence, and chain-of-thought reasoning."
+                    "Get the report for an AI scan. Returns a findings array of full AI scan finding "
+                    "objects plus a summary breakdown by severity, confidence, and category. "
+                    "Each finding includes confidence (high/medium/low — how certain the AI analysis "
+                    "is the vulnerability is real) and optionally verification_status (outcome of a "
+                    "secondary AI verification pass: confirmed, uncertain, or rejected). "
+                    "severity and confidence are independent — high severity + medium confidence "
+                    "still warrants investigation. "
+                    "Note: use get_finding for standard scan findings from create_scan; those are "
+                    "a separate finding type and do not include confidence scores."
                 ),
                 inputSchema={
                     "type": "object",
@@ -220,9 +224,9 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 description=(
                     "Search and filter security findings. Defaults to showing unresolved (untriaged) findings. "
                     "Use severity and state filters to narrow results. "
-                    "When asset_id is provided, results span all scans for that repository — "
-                    "you may see findings from older scans alongside recent ones. "
-                    "Use scan_id to scope results to a specific scan run. "
+                    "Results span all scans for the repository — "
+                    "you may see findings from older scans alongside recent ones; "
+                    "use scan_id to scope to a specific scan run. "
                     "Start with critical and high severity findings."
                 ),
                 inputSchema={
@@ -269,18 +273,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="get_finding",
                 description=(
-                    "Get full details of a security finding, including code evidence, "
+                    "Get full details of a standard scan finding, including code evidence, "
                     "file path, line numbers, and description. Always read the actual "
                     "source file at the cited location before triaging — verify the "
                     "vulnerable code still exists there and matches the evidence. "
                     "Findings can become stale if the code was changed after the scan. "
-                    "For AI scan findings, the response includes confidence "
-                    "(high/medium/low — how certain the analysis is the vulnerability "
-                    "is real) and evidence_complete (false means the pipeline flagged "
-                    "an evidence gap but still found the issue credible — investigate "
-                    "further rather than suppressing). severity and confidence are "
-                    "independent: high severity + medium confidence still warrants "
-                    "investigation."
+                    "For AI scan findings, use get_ai_scan_report instead."
                 ),
                 inputSchema={
                     "type": "object",
@@ -298,10 +296,10 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 description=(
                     "Get an AI-generated remediation suggestion for a finding, "
                     "including a suggested code fix and explanation. "
-                    "Check the changes_behavior field in the response — if true, "
-                    "the fix alters observable behavior or may break existing "
-                    "functionality, and the behavioral_risk field explains what. "
-                    "Review carefully before applying autonomously."
+                    "If the response includes a behavioral_risk field, check "
+                    "changes_behavior — if true, the fix alters observable behavior "
+                    "or may break existing functionality; behavioral_risk.description "
+                    "explains what. Review carefully before applying autonomously."
                 ),
                 inputSchema={
                     "type": "object",
