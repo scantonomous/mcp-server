@@ -153,8 +153,13 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="create_ai_scan",
                 description=(
-                    "Create a quick AI-powered security scan. Faster than a full scan "
-                    "but may not catch all issues."
+                    "Create an AI-powered security scan. Faster than a full scan and can "
+                    "cover multiple repositories at once. Uses a multi-phase AI pipeline "
+                    "(structural analysis, threat modeling, evidence gathering, AI judging) "
+                    "rather than traditional scanners, so findings carry explicit confidence "
+                    "scores and chain-of-thought reasoning. Prefer this when you want "
+                    "cross-repo threat analysis or faster turnaround; prefer create_scan "
+                    "when you need full scanner coverage (e.g. dependency CVEs, secrets)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -218,8 +223,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="list_findings",
                 description=(
                     "Search and filter security findings. Defaults to showing unresolved (untriaged) findings. "
-                    "Use severity and state filters to narrow results. Use asset_id to get findings "
-                    "from the most recent completed scan of a specific repository."
+                    "Use severity and state filters to narrow results. "
+                    "When asset_id is provided, results span all scans for that repository — "
+                    "you may see findings from older scans alongside recent ones. "
+                    "Use scan_id to scope results to a specific scan run. "
+                    "Start with critical and high severity findings."
                 ),
                 inputSchema={
                     "type": "object",
@@ -266,8 +274,10 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="get_finding",
                 description=(
                     "Get full details of a security finding, including code evidence, "
-                    "file path, line numbers, and description. Use this to understand "
-                    "the finding before triaging or fixing it."
+                    "file path, line numbers, and description. Always read the actual "
+                    "source file at the cited location before triaging — verify the "
+                    "vulnerable code still exists there and matches the evidence. "
+                    "Findings can become stale if the code was changed after the scan."
                 ),
                 inputSchema={
                     "type": "object",
@@ -284,7 +294,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="get_remediation",
                 description=(
                     "Get an AI-generated remediation suggestion for a finding, "
-                    "including a suggested code fix and explanation."
+                    "including a suggested code fix and explanation. "
+                    "Check the changes_behavior field in the response — if true, "
+                    "the fix alters observable behavior or may break existing "
+                    "functionality, and the behavioral_risk field explains what. "
+                    "Review carefully before applying autonomously."
                 ),
                 inputSchema={
                     "type": "object",
@@ -357,7 +371,10 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "maxLength": 1000,
                             "description": (
                                 "Explanation for the decision. Required for false_positive "
-                                "and accepted_risk. For fixed, describe the fix applied."
+                                "and accepted_risk. For fixed, describe the fix applied. "
+                                "For false_positive, cite the specific file, line, or "
+                                "security control that makes the attack path non-exploitable "
+                                "— vague reasons like 'not applicable' will be rejected."
                             ),
                         },
                         "ai_model": {
