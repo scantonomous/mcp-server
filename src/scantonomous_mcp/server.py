@@ -31,18 +31,15 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "repositories for security vulnerabilities, review findings, get AI-generated "
             "remediation suggestions, and triage issues.\n\n"
             "Understanding findings:\n"
-            "Findings have been validated through a multi-phase AI pipeline (structural "
-            "analysis, evidence-driven threat modeling, AI judging, and false-positive "
-            "filtering). They represent confirmed or high-confidence security issues — "
-            "not raw scanner noise. Do not dismiss them without concrete evidence.\n\n"
-            "severity (critical/high/medium/low/info) is the business impact if "
-            "exploited. confidence (high/medium/low) is how certain the analysis is "
-            "that the vulnerability is real. These are independent: a high-severity "
-            "finding with medium confidence still warrants investigation — do not "
-            "suppress based on confidence alone.\n\n"
-            "If a finding has evidence_complete: false, the pipeline flagged incomplete "
-            "evidence but still found the issue credible. Investigate further; do not "
-            "suppress.\n\n"
+            "Finding provenance varies by scan type. Standard scan findings "
+            "(create_scan / list_findings) are deduplicated and normalized across "
+            "multiple security scanners — they represent real code patterns matching "
+            "known vulnerability signatures, but have not been through AI judgment. "
+            "AI scan findings (create_ai_scan / get_ai_scan_report) have been through "
+            "a multi-phase AI pipeline (structural analysis, evidence-driven threat "
+            "modeling, AI judging, and false-positive filtering) and carry higher "
+            "confidence. In both cases, do not dismiss findings without reading the "
+            "actual source code first.\n\n"
             "When to use these tools:\n"
             "- When the user asks about security vulnerabilities, findings, or scans\n"
             "- After significant code changes, to check for newly introduced issues\n"
@@ -172,7 +169,16 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             ),
             Tool(
                 name="get_ai_scan_report",
-                description="Get the executive summary report for an AI scan, including severity breakdown and key findings.",
+                description=(
+                    "Get the executive summary report for an AI scan, including severity breakdown and key findings. "
+                    "AI scan findings have been through multi-phase AI validation (threat modeling, evidence gathering, "
+                    "and AI judging), so carry higher confidence than standard scan findings. "
+                    "severity (critical/high/medium/low/info) is business impact if exploited; "
+                    "confidence (high/medium/low) is how certain the analysis is the vulnerability is real — "
+                    "these are independent, so high severity + medium confidence still warrants investigation. "
+                    "If evidence_complete is false, the pipeline flagged a gap but still found the issue credible; "
+                    "investigate further rather than suppressing."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
