@@ -178,11 +178,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "Get the executive summary report for an AI scan, including severity breakdown and key findings. "
                     "AI scan findings have been through multi-phase AI validation (threat modeling, evidence gathering, "
                     "and AI judging), so carry higher confidence than standard scan findings. "
-                    "severity (critical/high/medium/low/info) is business impact if exploited; "
-                    "confidence (high/medium/low) is how certain the analysis is the vulnerability is real — "
-                    "these are independent, so high severity + medium confidence still warrants investigation. "
-                    "If evidence_complete is false, the pipeline flagged a gap but still found the issue credible; "
-                    "investigate further rather than suppressing."
+                    "Use get_finding on individual finding IDs from this report to get full details "
+                    "including confidence scores, evidence, and chain-of-thought reasoning."
                 ),
                 inputSchema={
                     "type": "object",
@@ -277,7 +274,14 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "file path, line numbers, and description. Always read the actual "
                     "source file at the cited location before triaging — verify the "
                     "vulnerable code still exists there and matches the evidence. "
-                    "Findings can become stale if the code was changed after the scan."
+                    "Findings can become stale if the code was changed after the scan. "
+                    "For AI scan findings, the response includes confidence "
+                    "(high/medium/low — how certain the analysis is the vulnerability "
+                    "is real) and evidence_complete (false means the pipeline flagged "
+                    "an evidence gap but still found the issue credible — investigate "
+                    "further rather than suppressing). severity and confidence are "
+                    "independent: high severity + medium confidence still warrants "
+                    "investigation."
                 ),
                 inputSchema={
                     "type": "object",
@@ -374,7 +378,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                                 "and accepted_risk. For fixed, describe the fix applied. "
                                 "For false_positive, cite the specific file, line, or "
                                 "security control that makes the attack path non-exploitable "
-                                "— vague reasons like 'not applicable' will be rejected."
+                                "— vague reasons like 'not applicable' undermine the audit "
+                                "trail and may be flagged during human review."
                             ),
                         },
                         "ai_model": {
