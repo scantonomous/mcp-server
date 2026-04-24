@@ -45,15 +45,16 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "- When the user asks you to run a security scan or review security posture\n"
             "- When triaging findings: get the finding details, read the actual source "
             "code, decide if it's a true positive or false positive, then fix or triage it\n\n"
-            "Triage workflow:\n"
+            "Triage workflow (standard scan findings from create_scan):\n"
             "1. list_findings to see unresolved findings\n"
             "2. get_finding for full details (file path, line numbers, evidence)\n"
             "3. get_remediation for AI-suggested fix\n"
             "4. Read the actual source file to verify — never skip this step\n"
             "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
-            "6. If false positive: triage_finding with state=false_positive — you must "
-            "cite the specific line of code or security control that makes the attack "
-            "path non-exploitable. 'Looks fine' is not sufficient.\n"
+            "6. If false positive: triage_finding with state=false_positive — explain "
+            "specifically why the attack path is non-exploitable (e.g. the line that "
+            "prevents it, a control that mitigates it, or why the context makes it "
+            "unexploitable such as test-only code or an internal endpoint).\n"
             "7. If accepted risk: triage_finding with state=accepted_risk, "
             "approval_reference (URL/ticket), and ecd (expiry, max 1 year)\n"
             "8. If will fix later: triage_finding with state=will_fix, ecd=YYYY-MM-DD, "
@@ -61,6 +62,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "9. When multiple findings share the same triage outcome, use finding_ids to "
             "batch-triage up to 25 at once — but only after verifying each finding "
             "individually in the source file first\n\n"
+            "Triage workflow (AI scan findings from create_ai_scan):\n"
+            "1. get_ai_scan_report — findings are pre-loaded in the report with "
+            "confidence scores and verification_status; no list_findings step needed\n"
+            "2. Read the actual source file at the cited location to verify\n"
+            "3. triage_finding using the finding_id from the report\n\n"
             "Prioritize critical and high severity findings first."
         ),
     )
@@ -156,9 +162,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "cover multiple repositories at once. Uses a multi-phase AI pipeline "
                     "(structural analysis, threat modeling, evidence gathering, AI judging) "
                     "rather than traditional scanners, so findings carry explicit confidence "
-                    "scores. Prefer this when you want "
-                    "cross-repo threat analysis or faster turnaround; prefer create_scan "
-                    "when you need full scanner coverage (e.g. dependency CVEs, secrets)."
+                    "scores. Use this for cross-repo threat analysis or faster turnaround; "
+                    "use create_scan for full scanner coverage (e.g. dependency CVEs, secrets)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -394,7 +399,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             ),
             Tool(
                 name="get_findings_summary",
-                description="Get aggregate statistics for findings: severity breakdown, state counts, totals.",
+                description=(
+                    "Get aggregate statistics for standard scan findings: severity breakdown, "
+                    "state counts, totals. Covers findings from create_scan only — "
+                    "AI scan findings from create_ai_scan are not included."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
