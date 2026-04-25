@@ -62,11 +62,10 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "9. When multiple findings share the same triage outcome, use finding_ids to "
             "batch-triage up to 25 at once — but only after verifying each finding "
             "individually in the source file first\n\n"
-            "Triage workflow (AI scan findings from create_ai_scan):\n"
-            "1. get_ai_scan_report — findings are pre-loaded in the report with "
-            "confidence scores and verification_status; no list_findings step needed\n"
-            "2. Read the actual source file at the cited location to verify\n"
-            "3. triage_finding using the finding_id from the report\n\n"
+            "AI scan findings (from create_ai_scan / get_ai_scan_report) are "
+            "report-only — triage_finding does not support AI scan finding IDs and "
+            "will fail. Use the report to identify issues and investigate in source; "
+            "triage is not available via MCP for AI scan findings.\n\n"
             "Prioritize critical and high severity findings first."
         ),
     )
