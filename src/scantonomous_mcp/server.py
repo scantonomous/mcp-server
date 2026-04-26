@@ -30,25 +30,42 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             "Scantonomous is a security scanning platform. Use these tools to scan "
             "repositories for security vulnerabilities, review findings, get AI-generated "
             "remediation suggestions, and triage issues.\n\n"
+            "Understanding findings:\n"
+            "Finding provenance varies by scan type. Standard scan findings "
+            "(create_scan / list_findings) are normalized and deduplicated across "
+            "multiple security scanners — false positives are possible, so always "
+            "verify in source before triaging. AI scan findings "
+            "(create_ai_scan / get_ai_scan_report) have been through additional AI "
+            "analysis and may include confidence scores, but are also not guaranteed "
+            "to be true positives. In both cases, read the actual source code before "
+            "making a triage decision.\n\n"
             "When to use these tools:\n"
             "- When the user asks about security vulnerabilities, findings, or scans\n"
             "- After significant code changes, to check for newly introduced issues\n"
             "- When the user asks you to run a security scan or review security posture\n"
             "- When triaging findings: get the finding details, read the actual source "
             "code, decide if it's a true positive or false positive, then fix or triage it\n\n"
-            "Triage workflow:\n"
+            "Triage workflow (standard scan findings from create_scan):\n"
             "1. list_findings to see unresolved findings\n"
             "2. get_finding for full details (file path, line numbers, evidence)\n"
             "3. get_remediation for AI-suggested fix\n"
-            "4. Read the actual source file to verify\n"
+            "4. Read the actual source file to verify — never skip this step\n"
             "5. If true positive: apply the fix, then triage_finding with state=fixed\n"
-            "6. If false positive: triage_finding with state=false_positive and explain why\n"
+            "6. If false positive: triage_finding with state=false_positive — explain "
+            "specifically why the attack path is non-exploitable (e.g. the line that "
+            "prevents it, a control that mitigates it, or why the context makes it "
+            "unexploitable such as test-only code or an internal endpoint).\n"
             "7. If accepted risk: triage_finding with state=accepted_risk, "
             "approval_reference (URL/ticket), and ecd (expiry, max 1 year)\n"
             "8. If will fix later: triage_finding with state=will_fix, ecd=YYYY-MM-DD, "
             "and reason explaining the plan\n"
             "9. When multiple findings share the same triage outcome, use finding_ids to "
-            "batch-triage up to 25 at once\n\n"
+            "batch-triage up to 25 at once — but only after verifying each finding "
+            "individually in the source file first\n\n"
+            "AI scan findings (from create_ai_scan / get_ai_scan_report) are "
+            "report-only — triage_finding does not support AI scan finding IDs and "
+            "will fail. Use the report to identify issues and investigate in source; "
+            "triage is not available via MCP for AI scan findings.\n\n"
             "Prioritize critical and high severity findings first."
         ),
     )
@@ -140,8 +157,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="create_ai_scan",
                 description=(
-                    "Create a quick AI-powered security scan. Faster than a full scan "
-                    "but may not catch all issues."
+                    "Create an AI-powered security scan. Faster than a full scan and can "
+                    "cover multiple repositories at once. Uses a multi-phase AI pipeline "
+                    "(structural analysis, threat modeling, evidence gathering, AI judging) "
+                    "rather than traditional scanners, so findings carry explicit confidence "
+                    "scores. Use this for cross-repo threat analysis or faster turnaround; "
+                    "use create_scan for full scanner coverage (e.g. dependency CVEs, secrets)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -156,7 +177,17 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             ),
             Tool(
                 name="get_ai_scan_report",
-                description="Get the executive summary report for an AI scan, including severity breakdown and key findings.",
+                description=(
+                    "Get the report for an AI scan. Returns a findings array of full AI scan finding "
+                    "objects plus a summary breakdown by severity, confidence, and category. "
+                    "Each finding includes confidence (high/medium/low — how certain the AI analysis "
+                    "is the vulnerability is real) and optionally verification_status (outcome of the "
+                    "AI judge pass: report = include as-is, downgrade = real but severity reduced). "
+                    "severity and confidence are independent — high severity + medium confidence "
+                    "still warrants investigation. "
+                    "Note: use get_finding for standard scan findings from create_scan; those are "
+                    "a separate finding type and do not include confidence scores."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -196,8 +227,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="list_findings",
                 description=(
                     "Search and filter security findings. Defaults to showing unresolved (untriaged) findings. "
-                    "Use severity and state filters to narrow results. Use asset_id to get findings "
-                    "from the most recent completed scan of a specific repository."
+                    "Use severity and state filters to narrow results. "
+                    "Results span all scans for the repository — "
+                    "you may see findings from older scans alongside recent ones; "
+                    "use scan_id to scope to a specific scan run. "
+                    "Start with critical and high severity findings."
                 ),
                 inputSchema={
                     "type": "object",
@@ -243,9 +277,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="get_finding",
                 description=(
-                    "Get full details of a security finding, including code evidence, "
-                    "file path, line numbers, and description. Use this to understand "
-                    "the finding before triaging or fixing it."
+                    "Get full details of a standard scan finding, including code evidence, "
+                    "file path, line numbers, and description. Always read the actual "
+                    "source file at the cited location before triaging — verify the "
+                    "vulnerable code still exists there and matches the evidence. "
+                    "Findings can become stale if the code was changed after the scan. "
+                    "For AI scan findings, use get_ai_scan_report instead."
                 ),
                 inputSchema={
                     "type": "object",
@@ -262,7 +299,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="get_remediation",
                 description=(
                     "Get an AI-generated remediation suggestion for a finding, "
-                    "including a suggested code fix and explanation."
+                    "including a suggested code fix and explanation. "
+                    "If the response includes a behavioral_risk field, check "
+                    "changes_behavior — if true, the fix alters observable behavior "
+                    "or may break existing functionality; behavioral_risk.description "
+                    "explains what. Review carefully before applying autonomously."
                 ),
                 inputSchema={
                     "type": "object",
@@ -335,7 +376,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "maxLength": 1000,
                             "description": (
                                 "Explanation for the decision. Required for false_positive "
-                                "and accepted_risk. For fixed, describe the fix applied."
+                                "and accepted_risk. For fixed, describe the fix applied. "
+                                "For false_positive, explain specifically why the attack "
+                                "path is non-exploitable — e.g. the line that prevents it, "
+                                "a control that fully mitigates it, or why the context makes "
+                                "it unexploitable (test-only code, internal endpoint with no "
+                                "external access). Vague reasons undermine the audit trail."
                             ),
                         },
                         "ai_model": {
@@ -352,7 +398,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             ),
             Tool(
                 name="get_findings_summary",
-                description="Get aggregate statistics for findings: severity breakdown, state counts, totals.",
+                description=(
+                    "Get aggregate statistics for standard scan findings: severity breakdown, "
+                    "state counts, totals. Covers findings from create_scan only — "
+                    "AI scan findings from create_ai_scan are not included."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
