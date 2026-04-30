@@ -43,61 +43,117 @@ def test_create_ai_scan_fans_out_per_asset() -> None:
             {"asset_id": "asset-1", "scan_id": "scan-1", "status": "queued"},
             {"asset_id": "asset-2", "scan_id": "scan-2", "status": "queued"},
         ],
+        "failed": [],
         "count": 2,
     }
 
 
-def test_create_ai_scan_propagates_api_error() -> None:
-    client = MagicMock()
-    client.post.side_effect = ApiError(503, "ai_scanner_unavailable")
+def test_create_ai_scan_continues_through_partial_failure() -> None:
+    """SCA-272 #35 [P2]: a mid-fan-out ApiError must not lose earlier scan_ids.
 
-    with pytest.raises(ApiError, match="ai_scanner_unavailable"):
-        ai_scans.create_ai_scan(client, asset_ids=["asset-1"])
+    Earlier asset creates have already burned AI quota and queued real
+    scans server-side. Raising on the first error would lose those
+    references; the agent could not watch or cancel them and a naive
+    retry would create duplicates and double-spend quota. The wrapper
+    captures per-asset failures and returns them alongside successes.
+    """
+    client = MagicMock()
+    err = ApiError(503, "ai_scanner_unavailable")
+    client.post.side_effect = [
+        {"scan_id": "scan-1", "status": "queued"},
+        err,
+        {"scan_id": "scan-3", "status": "queued"},
+    ]
+
+    result = ai_scans.create_ai_scan(
+        client, asset_ids=["asset-1", "asset-2", "asset-3"]
+    )
+
+    assert result["count"] == 2
+    assert [r["asset_id"] for r in result["ai_scans"]] == ["asset-1", "asset-3"]
+    assert len(result["failed"]) == 1
+    failed = result["failed"][0]
+    assert failed["asset_id"] == "asset-2"
+    assert failed["status_code"] == 503
+    assert "ai_scanner_unavailable" in failed["message"]
+
+
+def test_create_ai_scan_full_failure_returns_only_failed() -> None:
+    """All assets fail → empty ai_scans, full failed list, count==0."""
+    client = MagicMock()
+    client.post.side_effect = [
+        ApiError(403, "ai_scans_quota_exceeded"),
+        ApiError(403, "ai_scans_quota_exceeded"),
+    ]
+
+    result = ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2"])
+
+    assert result["count"] == 0
+    assert result["ai_scans"] == []
+    assert len(result["failed"]) == 2
+    assert all(f["status_code"] == 403 for f in result["failed"])
 
 
 def test_get_ai_scan_report_synthesizes_from_unified_api() -> None:
+    """SCA-272 #35 [P3]: severity breakdown comes from /findings/summary
+    (server aggregates across all findings) rather than counting the first
+    page of /scans/{id}/findings."""
     client = MagicMock()
     client.get.side_effect = [
+        # 1) GET /scans/{id}
         {
             "scan_id": "scan-1",
             "scan_kind": "ai",
             "status": "completed",
             "started_at": "2026-04-27T00:00:00Z",
             "ended_at": "2026-04-27T00:30:00Z",
-            "findings_count": 3,
+            "findings_count": 73,  # exceeds default per-page limit
         },
+        # 2) GET /findings/summary?scan_id=scan-1 -- full aggregate
+        {
+            "total": 73,
+            "open": 70,
+            "triaged": 1,
+            "resolved": 2,
+            "open_by_severity": {"high": 12, "medium": 38, "low": 20},
+        },
+        # 3) GET /scans/{id}/findings (truncated key_findings)
         {
             "items": [
-                {"finding_id": "f-1", "severity": "HIGH"},
+                {"finding_id": "f-1", "severity": "high"},
                 {"finding_id": "f-2", "severity": "high"},
-                {"finding_id": "f-3", "severity": "medium"},
             ]
         },
     ]
 
     result = ai_scans.get_ai_scan_report(client, ai_scan_id="scan-1")
 
-    assert client.get.call_count == 2
+    assert client.get.call_count == 3
     client.get.assert_any_call("/scans/scan-1")
+    client.get.assert_any_call("/findings/summary", params={"scan_id": "scan-1"})
     client.get.assert_any_call(
         "/scans/scan-1/findings",
-        params={"scanner_type": "ai", "limit": 50},
+        params={"scanner_type": "ai", "limit": 10},
     )
     assert result["scan_id"] == "scan-1"
     assert result["scan_kind"] == "ai"
     assert result["status"] == "completed"
-    assert result["started_at"] == "2026-04-27T00:00:00Z"
-    assert result["ended_at"] == "2026-04-27T00:30:00Z"
-    assert result["findings_count"] == 3
-    assert result["severity_breakdown"] == {"high": 2, "medium": 1}
-    assert len(result["key_findings"]) == 3
+    assert result["findings_count"] == 73
+    # The breakdown reflects ALL 70 open findings, not just the 2 in
+    # key_findings -- this is the regression guard for the [P3] issue.
+    assert result["severity_breakdown"] == {"high": 12, "medium": 38, "low": 20}
+    assert result["open_count"] == 70
+    assert result["triaged_count"] == 1
+    assert result["resolved_count"] == 2
+    assert len(result["key_findings"]) == 2
 
 
-def test_get_ai_scan_report_handles_missing_findings_payload() -> None:
+def test_get_ai_scan_report_handles_missing_summary_payload() -> None:
     client = MagicMock()
     client.get.side_effect = [
         {"scan_id": "scan-1", "status": "running"},
-        {},
+        {},  # /findings/summary returns empty dict
+        {},  # /findings returns empty dict
     ]
 
     result = ai_scans.get_ai_scan_report(client, ai_scan_id="scan-1")
@@ -105,6 +161,8 @@ def test_get_ai_scan_report_handles_missing_findings_payload() -> None:
     assert result["status"] == "running"
     assert result["severity_breakdown"] == {}
     assert result["key_findings"] == []
+    assert result["open_count"] is None
+    assert result["triaged_count"] is None
 
 
 def test_watch_ai_scan_returns_immediately_for_terminal_status() -> None:
