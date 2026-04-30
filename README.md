@@ -134,8 +134,9 @@ scantonomous-mcp --stage dev logout
 | `list_assets` | List connected repositories |
 | `create_scan` | Trigger a security scan |
 | `get_scan` | Check scan status |
-| `create_ai_scan` | Quick AI-powered scan |
-| `get_ai_scan_report` | Executive scan summary |
+| `create_ai_scan` | AI-powered scan (Startup tier+); fans out one `POST /v1/scans` per asset with `scan_kind="ai"` |
+| `get_ai_scan_report` | Executive summary synthesized from `GET /v1/scans/{id}` + AI-scoped findings |
+| `watch_ai_scan` | Poll an AI scan to terminal status (default 60-min timeout) |
 | `list_findings` | Search/filter findings |
 | `get_finding` | Full finding details + evidence |
 | `get_remediation` | AI-generated fix suggestion |

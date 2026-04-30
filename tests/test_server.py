@@ -143,8 +143,8 @@ def test_call_tool_formats_api_errors(monkeypatch) -> None:
         (
             "create_ai_scan",
             ("ai_scans", "create_ai_scan"),
-            {},
-            {"asset_ids": None},
+            {"asset_ids": ["asset-1"]},
+            {"asset_ids": ["asset-1"]},
         ),
         (
             "get_ai_scan_report",
@@ -156,7 +156,7 @@ def test_call_tool_formats_api_errors(monkeypatch) -> None:
             "watch_ai_scan",
             ("ai_scans", "watch_ai_scan"),
             {"ai_scan_id": "ai-1"},
-            {"ai_scan_id": "ai-1", "timeout_minutes": 30},
+            {"ai_scan_id": "ai-1", "timeout_minutes": 60},
         ),
         (
             "list_findings",

@@ -157,12 +157,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="create_ai_scan",
                 description=(
-                    "Create an AI-powered security scan. Faster than a full scan and can "
-                    "cover multiple repositories at once. Uses a multi-phase AI pipeline "
-                    "(structural analysis, threat modeling, evidence gathering, AI judging) "
-                    "rather than traditional scanners, so findings carry explicit confidence "
-                    "scores. Use this for cross-repo threat analysis or faster turnaround; "
-                    "use create_scan for full scanner coverage (e.g. dependency CVEs, secrets)."
+                    "Create one or more AI-powered security scans. Uses a multi-phase AI "
+                    "pipeline (structural analysis, threat modeling, evidence gathering, "
+                    "AI judging) rather than traditional scanners. Use this for cross-repo "
+                    "threat analysis; use create_scan for traditional scanner coverage "
+                    "(dependency CVEs, secrets). One scan is created per asset_id. "
+                    "Requires the Startup tier or higher."
                 ),
                 inputSchema={
                     "type": "object",
@@ -170,23 +170,19 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         "asset_ids": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Optional list of asset IDs. If omitted, scans all connected assets.",
+                            "minItems": 1,
+                            "description": "Asset IDs to scan. One AI scan is created per asset.",
                         },
                     },
+                    "required": ["asset_ids"],
                 },
             ),
             Tool(
                 name="get_ai_scan_report",
                 description=(
-                    "Get the report for an AI scan. Returns a findings array of full AI scan finding "
-                    "objects plus a summary breakdown by severity, confidence, and category. "
-                    "Each finding includes confidence (high/medium/low — how certain the AI analysis "
-                    "is the vulnerability is real) and optionally verification_status (outcome of the "
-                    "AI judge pass: report = include as-is, downgrade = real but severity reduced). "
-                    "severity and confidence are independent — high severity + medium confidence "
-                    "still warrants investigation. "
-                    "Note: use get_finding for standard scan findings from create_scan; those are "
-                    "a separate finding type and do not include confidence scores."
+                    "Get the executive-summary report for an AI scan. Returns scan status, "
+                    "timestamps, severity breakdown, and a truncated list of key findings. "
+                    "For the full finding set, use list_findings with scanner_type=ai."
                 ),
                 inputSchema={
                     "type": "object",
@@ -203,9 +199,9 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 name="watch_ai_scan",
                 description=(
                     "Wait for an AI scan to complete by polling every ~30 seconds. "
-                    "Returns the final AI scan result once it reaches a terminal status "
-                    "(completed, completed_partial, or failed). Use this after create_ai_scan "
-                    "to wait for results instead of polling manually."
+                    "Returns the final scan record once it reaches a terminal status "
+                    "(completed, completed_partial, failed, or canceled). AI scans run "
+                    "longer than standard scans, so the default timeout is 60 minutes."
                 ),
                 inputSchema={
                     "type": "object",
@@ -216,8 +212,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "timeout_minutes": {
                             "type": "integer",
-                            "description": "Maximum time to wait in minutes (default 30).",
-                            "default": 30,
+                            "description": "Maximum time to wait in minutes (default 60).",
+                            "default": 60,
                         },
                     },
                     "required": ["ai_scan_id"],
@@ -451,14 +447,14 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
                 timeout_minutes=args.get("timeout_minutes", 30),
             )
         case "create_ai_scan":
-            return ai_scans.create_ai_scan(api, asset_ids=args.get("asset_ids"))
+            return ai_scans.create_ai_scan(api, asset_ids=args["asset_ids"])
         case "get_ai_scan_report":
             return ai_scans.get_ai_scan_report(api, ai_scan_id=args["ai_scan_id"])
         case "watch_ai_scan":
             return await ai_scans.watch_ai_scan(
                 api,
                 ai_scan_id=args["ai_scan_id"],
-                timeout_minutes=args.get("timeout_minutes", 30),
+                timeout_minutes=args.get("timeout_minutes", 60),
             )
         case "list_findings":
             return findings.list_findings(

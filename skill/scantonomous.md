@@ -14,7 +14,7 @@ You have access to Scantonomous security scanning tools via MCP. Use them to sca
 - When the user asks for a security review
 - Periodically during long coding sessions
 
-Use `create_scan` for thorough analysis or `create_ai_scan` for a quick check.
+Use `create_scan` for traditional scanner coverage (SAST/SCA/secrets), or `create_ai_scan` for AI-driven cross-repo threat analysis. AI scans require the Startup tier or higher and run longer than standard scans, but produce findings with explicit confidence and cross-repo chain context. Both scan kinds flow through the same unified `/v1/scans` API and share the findings UI.
 
 ## Triage Workflow
 
