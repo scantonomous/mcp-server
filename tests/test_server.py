@@ -121,6 +121,9 @@ def test_call_tool_formats_auth_errors(monkeypatch) -> None:
 
 
 def test_call_tool_formats_api_errors(monkeypatch) -> None:
+    """SCA-280 review: ApiError without a payload returns the
+    structured envelope with no ``details`` key, but still parseable
+    as JSON so agents can branch on ``error == "api_error"``."""
     server_instance = server.create_server(client_id="client-123", stage="dev")
     asyncio.run(_list_tools(server_instance))
     monkeypatch.setattr(server, "_dispatch_tool", AsyncMock(side_effect=ApiError(403, "forbidden")))
@@ -128,7 +131,55 @@ def test_call_tool_formats_api_errors(monkeypatch) -> None:
     result = asyncio.run(_call_tool(server_instance, "get_scan", {"scan_id": "scan-1"}))
 
     assert result.root.isError is False
-    assert result.root.content[0].text == "API error: API error 403: forbidden"
+    body = json.loads(result.root.content[0].text)
+    assert body["error"] == "api_error"
+    assert body["status_code"] == 403
+    assert "forbidden" in body["message"]
+    assert "details" not in body  # no payload → no details key
+
+
+def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch) -> None:
+    """SCA-280 review: when a create_ai_scan ApiError carries a
+    structured payload (denied_asset_id, quota), the MCP tool response
+    must include those fields so the agent can tell which selected
+    repo to remove or fix.
+
+    Without this, a multi-asset batch denial like
+    ``{"message": "asset asset-2 is inactive",
+       "denied_asset_id": "asset-2"}`` would surface to the agent as
+    just ``"API error: ..."`` text — losing the precise asset
+    reference and forcing the user to guess.
+    """
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    asyncio.run(_list_tools(server_instance))
+    err = ApiError(
+        403,
+        "asset asset-2 is inactive",
+        payload={
+            "message": "asset asset-2 is inactive",
+            "denied_asset_id": "asset-2",
+            "quota": {"ai_scan_limit": 10, "ai_scans_used": 4},
+        },
+    )
+    monkeypatch.setattr(server, "_dispatch_tool", AsyncMock(side_effect=err))
+
+    result = asyncio.run(
+        _call_tool(
+            server_instance,
+            "create_ai_scan",
+            {"asset_ids": ["asset-1", "asset-2", "asset-3"]},
+        )
+    )
+
+    assert result.root.isError is False
+    body = json.loads(result.root.content[0].text)
+    assert body["error"] == "api_error"
+    assert body["status_code"] == 403
+    # The structured fields the agent needs to act on are now in the
+    # tool response, not buried in a string.
+    assert body["details"]["denied_asset_id"] == "asset-2"
+    assert body["details"]["quota"]["ai_scans_used"] == 4
+    assert body["details"]["quota"]["ai_scan_limit"] == 10
 
 
 @pytest.mark.parametrize(

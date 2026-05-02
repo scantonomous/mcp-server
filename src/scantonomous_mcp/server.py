@@ -438,7 +438,22 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 )
             ]
         except ApiError as e:
-            return [TextContent(type="text", text=f"API error: {e}")]
+            # SCA-280 review: include the structured server payload
+            # (e.g. ``denied_asset_id``, ``quota``) so the agent can
+            # tell which selected repo to remove from a multi-asset
+            # batch failure. The shared client preserves the parsed
+            # JSON body on ``ApiError.payload``; serialize it as JSON
+            # alongside the human-readable summary so both
+            # text-following and structured-parsing agents can act
+            # on the response.
+            payload = {
+                "error": "api_error",
+                "status_code": e.status_code,
+                "message": str(e),
+            }
+            if e.payload is not None:
+                payload["details"] = e.payload
+            return [TextContent(type="text", text=json.dumps(payload, indent=2))]
 
     return server
 
