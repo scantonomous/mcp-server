@@ -90,8 +90,13 @@ def create_ai_scan(
         clear error before burning a network round-trip.
     :raises ApiError: If the server-side batch policy rejects the
         request (e.g. tier doesn't include AI, account suspended,
-        asset inactive). The error includes the full server response
-        so the agent can show the user which asset was rejected.
+        asset inactive, quota exceeded). ``ApiError.payload`` carries
+        the full structured server response so the agent can read
+        ``denied_asset_id`` (the offending asset for inactive /
+        unowned / no-credentials denials), ``quota`` (current usage on
+        quota_exceeded denials), and the human-readable ``message``
+        — important now that one request can fail because of one
+        selected repo.
     """
     if not asset_ids:
         raise ValueError("asset_ids is required: pass the assets to scan")

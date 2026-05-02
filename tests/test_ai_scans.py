@@ -116,6 +116,67 @@ def test_create_ai_scan_propagates_server_error() -> None:
     assert "ai_scanner_not_in_tier" in str(exc.value)
 
 
+def test_create_ai_scan_preserves_batch_policy_payload_on_denial() -> None:
+    """SCA-280 review: structured fields from the batch policy denial
+    response (denied_asset_id, quota) must survive the ApiError boundary.
+
+    The batch action returns shapes like::
+
+        {"message": "asset asset-2 is inactive",
+         "denied_asset_id": "asset-2"}
+
+    Without preserving the full payload, the agent only sees a generic
+    text message and can't tell which asset to remove. With
+    ``ApiError.payload`` populated, the agent can surface the precise
+    failing asset.
+    """
+    client = MagicMock()
+    denial_payload = {
+        "message": "asset asset-2 is inactive",
+        "denied_asset_id": "asset-2",
+    }
+    client.post.side_effect = ApiError(
+        403,
+        "asset asset-2 is inactive",
+        payload=denial_payload,
+    )
+
+    with pytest.raises(ApiError) as exc:
+        ai_scans.create_ai_scan(
+            client, asset_ids=["asset-1", "asset-2", "asset-3"]
+        )
+
+    assert exc.value.status_code == 403
+    # Structured fields survive — the agent can read denied_asset_id.
+    assert exc.value.payload == denial_payload
+    assert exc.value.payload["denied_asset_id"] == "asset-2"
+
+
+def test_create_ai_scan_preserves_quota_exceeded_payload() -> None:
+    """Quota-exceeded denials carry a ``quota`` snapshot the agent can
+    surface so the user knows their current usage."""
+    client = MagicMock()
+    quota_payload = {
+        "message": "AI scan quota exceeded (10/10)",
+        "quota": {
+            "ai_scan_limit": 10,
+            "ai_scans_used": 10,
+            "subscription_period_end": "2026-06-01T00:00:00Z",
+        },
+    }
+    client.post.side_effect = ApiError(
+        403,
+        "AI scan quota exceeded (10/10)",
+        payload=quota_payload,
+    )
+
+    with pytest.raises(ApiError) as exc:
+        ai_scans.create_ai_scan(client, asset_ids=["asset-1"])
+
+    assert exc.value.payload == quota_payload
+    assert exc.value.payload["quota"]["ai_scans_used"] == 10
+
+
 def test_get_ai_scan_report_synthesizes_from_unified_api() -> None:
     """SCA-272 #35 [P3]: severity breakdown comes from /findings/summary
     (server aggregates across all findings) rather than counting the first
