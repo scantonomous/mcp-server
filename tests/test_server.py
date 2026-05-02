@@ -73,8 +73,14 @@ def test_create_server_registers_expected_tools_and_populates_cache() -> None:
 
     tools_by_name = {tool.name: tool for tool in tools}
     assert tools_by_name["create_scan"].inputSchema["required"] == ["asset_id"]
-    assert tools_by_name["triage_finding"].inputSchema["required"] == ["state", "reason", "ai_model"]
-    assert tools_by_name["triage_finding"].inputSchema["properties"]["finding_ids"]["maxItems"] == 25
+    assert tools_by_name["triage_finding"].inputSchema["required"] == [
+        "state",
+        "reason",
+        "ai_model",
+    ]
+    assert (
+        tools_by_name["triage_finding"].inputSchema["properties"]["finding_ids"]["maxItems"] == 25
+    )
 
 
 def test_call_tool_returns_validation_error_for_missing_required_fields() -> None:
@@ -84,7 +90,9 @@ def test_call_tool_returns_validation_error_for_missing_required_fields() -> Non
     result = asyncio.run(_call_tool(server_instance, "create_scan", {}))
 
     assert result.root.isError is True
-    assert result.root.content[0].text == "Input validation error: 'asset_id' is a required property"
+    assert (
+        result.root.content[0].text == "Input validation error: 'asset_id' is a required property"
+    )
 
 
 def test_call_tool_formats_success_as_json(monkeypatch) -> None:
@@ -126,7 +134,12 @@ def test_call_tool_formats_api_errors(monkeypatch) -> None:
 @pytest.mark.parametrize(
     ("tool_name", "target", "args", "expected_kwargs"),
     [
-        ("list_assets", ("scans", "list_assets"), {"query": "repo"}, {"query": "repo", "limit": 25}),
+        (
+            "list_assets",
+            ("scans", "list_assets"),
+            {"query": "repo"},
+            {"query": "repo", "limit": 25},
+        ),
         (
             "create_scan",
             ("scans", "create_scan"),
@@ -222,7 +235,9 @@ def test_dispatch_tool_routes_to_correct_handler(
     module = getattr(server, module_name)
     original = getattr(module, function_name)
     is_async = asyncio.iscoroutinefunction(original)
-    mock = AsyncMock(return_value={"ok": True}) if is_async else MagicMock(return_value={"ok": True})
+    mock = (
+        AsyncMock(return_value={"ok": True}) if is_async else MagicMock(return_value={"ok": True})
+    )
     monkeypatch.setattr(module, function_name, mock)
 
     result = asyncio.run(server._dispatch_tool(api, tool_name, args))

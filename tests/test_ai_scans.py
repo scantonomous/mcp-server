@@ -20,78 +20,100 @@ def test_create_ai_scan_raises_when_asset_ids_empty() -> None:
     client.post.assert_not_called()
 
 
-def test_create_ai_scan_fans_out_per_asset() -> None:
+def test_create_ai_scan_sends_one_request_with_asset_ids_list() -> None:
+    """SCA-280: a single multi-repo POST replaces the legacy per-asset fan-out.
+
+    The server-side ``scan_authorize_consume_batch`` policy validates
+    1..5 asset_ids atomically and consumes one quota slot total. The
+    MCP wrapper sends one request and returns one scan_id.
+    """
     client = MagicMock()
-    client.post.side_effect = [
-        {"scan_id": "scan-1", "status": "queued"},
-        {"scan_id": "scan-2", "status": "queued"},
-    ]
+    client.post.return_value = {"scan_id": "scan-1", "status": "queued"}
 
-    result = ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2"])
+    result = ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2", "asset-3"])
 
-    assert client.post.call_count == 2
-    client.post.assert_any_call(
+    # Single POST with full asset_ids list (not N POSTs).
+    client.post.assert_called_once_with(
         "/scans",
-        body={"asset_id": "asset-1", "scan_kind": "ai", "trigger_type": "mcp"},
-    )
-    client.post.assert_any_call(
-        "/scans",
-        body={"asset_id": "asset-2", "scan_kind": "ai", "trigger_type": "mcp"},
+        body={
+            "asset_ids": ["asset-1", "asset-2", "asset-3"],
+            "scan_kind": "ai",
+            "trigger_type": "mcp",
+        },
     )
     assert result == {
-        "ai_scans": [
-            {"asset_id": "asset-1", "scan_id": "scan-1", "status": "queued"},
-            {"asset_id": "asset-2", "scan_id": "scan-2", "status": "queued"},
-        ],
-        "failed": [],
-        "count": 2,
+        "scan_id": "scan-1",
+        "asset_ids": ["asset-1", "asset-2", "asset-3"],
+        "status": "queued",
+        "count": 3,
     }
 
 
-def test_create_ai_scan_continues_through_partial_failure() -> None:
-    """SCA-272 #35 [P2]: a mid-fan-out ApiError must not lose earlier scan_ids.
+def test_create_ai_scan_single_asset_uses_list_shape() -> None:
+    """A single asset still goes through the asset_ids list shape.
 
-    Earlier asset creates have already burned AI quota and queued real
-    scans server-side. Raising on the first error would lose those
-    references; the agent could not watch or cancel them and a naive
-    retry would create duplicates and double-spend quota. The wrapper
-    captures per-asset failures and returns them alongside successes.
+    The server's discriminator routing requires ``asset_ids`` (not
+    ``asset_id``) for AI scans. Wrapping the lone asset in a list keeps
+    the contract uniform.
     """
     client = MagicMock()
-    err = ApiError(503, "ai_scanner_unavailable")
-    client.post.side_effect = [
-        {"scan_id": "scan-1", "status": "queued"},
-        err,
-        {"scan_id": "scan-3", "status": "queued"},
-    ]
+    client.post.return_value = {"scan_id": "scan-solo", "status": "queued"}
 
-    result = ai_scans.create_ai_scan(
-        client, asset_ids=["asset-1", "asset-2", "asset-3"]
+    result = ai_scans.create_ai_scan(client, asset_ids=["only-asset"])
+
+    client.post.assert_called_once_with(
+        "/scans",
+        body={
+            "asset_ids": ["only-asset"],
+            "scan_kind": "ai",
+            "trigger_type": "mcp",
+        },
     )
-
-    assert result["count"] == 2
-    assert [r["asset_id"] for r in result["ai_scans"]] == ["asset-1", "asset-3"]
-    assert len(result["failed"]) == 1
-    failed = result["failed"][0]
-    assert failed["asset_id"] == "asset-2"
-    assert failed["status_code"] == 503
-    assert "ai_scanner_unavailable" in failed["message"]
+    assert result["scan_id"] == "scan-solo"
+    assert result["asset_ids"] == ["only-asset"]
+    assert result["count"] == 1
 
 
-def test_create_ai_scan_full_failure_returns_only_failed() -> None:
-    """All assets fail → empty ai_scans, full failed list, count==0."""
+def test_create_ai_scan_rejects_more_than_5_assets() -> None:
+    """SCA-280: hard cap at 5 repos per AI scan, validated client-side.
+
+    Server-side ``scan_authorize_consume_batch`` enforces the same cap
+    but sending 6+ over the wire would burn a network round-trip for
+    a deterministic-failure case. Reject early.
+    """
     client = MagicMock()
-    client.post.side_effect = [
-        ApiError(403, "ai_scans_quota_exceeded"),
-        ApiError(403, "ai_scans_quota_exceeded"),
-    ]
+    too_many = [f"asset-{i}" for i in range(6)]
 
-    result = ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2"])
+    with pytest.raises(ValueError, match="at most 5"):
+        ai_scans.create_ai_scan(client, asset_ids=too_many)
 
-    assert result["count"] == 0
-    assert result["ai_scans"] == []
-    assert len(result["failed"]) == 2
-    assert all(f["status_code"] == 403 for f in result["failed"])
+    client.post.assert_not_called()
+
+
+def test_create_ai_scan_rejects_duplicate_asset_ids() -> None:
+    """Duplicates are validated client-side."""
+    client = MagicMock()
+
+    with pytest.raises(ValueError, match="unique"):
+        ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-1", "asset-2"])
+
+    client.post.assert_not_called()
+
+
+def test_create_ai_scan_propagates_server_error() -> None:
+    """ApiError from the server (e.g. tier denial, suspended account)
+    bubbles up unchanged so the agent can show the user the precise
+    reason. The legacy fan-out semantics that swallowed errors into a
+    `failed` array no longer apply — there's only one server call.
+    """
+    client = MagicMock()
+    client.post.side_effect = ApiError(403, "ai_scanner_not_in_tier")
+
+    with pytest.raises(ApiError) as exc:
+        ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2"])
+
+    assert exc.value.status_code == 403
+    assert "ai_scanner_not_in_tier" in str(exc.value)
 
 
 def test_get_ai_scan_report_synthesizes_from_unified_api() -> None:

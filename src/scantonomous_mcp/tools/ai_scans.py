@@ -48,69 +48,73 @@ _POLL_JITTER_SECONDS = 5
 _DEFAULT_TIMEOUT_MINUTES = 60
 
 
+#: SCA-280: hard cap on repos per AI scan (max 5). Mirrors the
+#: server-side cap enforced by ``scan_authorize_consume_batch``. Surface
+#: it client-side so the agent gets a clean ``ValueError`` instead of
+#: an HTTP 400 round-trip when it oversteps.
+_MAX_AI_SCAN_ASSETS = 5
+
+
 def create_ai_scan(
     client: ScantonomousClient,
     asset_ids: list[str],
 ) -> dict[str, Any]:
-    """Create one or more AI-powered security scans.
+    """Create one AI-powered security scan over 1-5 repositories.
 
-    Per the SCA-272 plan the unified scan API is single-asset
-    (``one canonical scan per asset``). For multi-asset agent prompts
-    this wrapper fans out client-side: one ``POST /v1/scans`` per asset,
-    each tagged ``scan_kind="ai"``.
+    SCA-280: AI scans are now a single multi-repo analysis pass — one
+    Scan record covers up to 5 ``asset_ids``, the orchestrator checks
+    them out in parallel, and a single AI scanner session reasons
+    across the full set. One quota slot is consumed per scan regardless
+    of repo count. This is the cross-repo capability the parent
+    SCA-272 issue promises.
 
-    Partial-failure semantics: if a per-asset POST fails midway through
-    fan-out, earlier asset creates have already burned AI quota and
-    queued real scans. Raising on the first error would lose those
-    ``scan_id`` references; the agent could not watch or cancel them
-    and a naive retry would create duplicates and double-spend quota.
-    Instead this wrapper continues through the full ``asset_ids`` list,
-    captures errors per-asset in a parallel ``failed`` array, and
-    returns both shapes so the agent can act on each independently.
+    The previous implementation fanned out client-side (one POST per
+    asset, each tagged ``scan_kind="ai"``); each POST produced an
+    independent single-repo AI scan and the agent had to stitch them
+    back together. That gave N scans with N quota slots and no actual
+    cross-repo signal. This wrapper now sends a single ``POST /v1/scans``
+    with the full ``asset_ids`` list and the server-side batch policy
+    consumes one slot atomically.
 
-    :param asset_ids: One or more asset IDs to scan. Required (the
-        prototype's "scan everything" default is gone with the unified
-        API; agents must pick assets explicitly).
-    :returns: ``{"ai_scans": [{"asset_id": ..., "scan_id": ...,
-        "status": ...}, ...], "failed": [{"asset_id": ...,
-        "status_code": int, "message": str}, ...], "count": N}``.
-        ``count`` reflects successful scans only, matching the
-        ``ai_scans`` list length so callers that key off ``count``
-        keep working. ``failed`` is always present (empty list on
-        full success) so callers can check it without conditional
-        attribute access.
-    :raises ValueError: If ``asset_ids`` is empty.
+    :param asset_ids: 1-5 unique asset IDs to scan together as one
+        cross-repo analysis. Order is preserved end-to-end (agent
+        selection → checkout Map → AI scanner LLM session).
+    :returns: ``{"scan_id": "...", "asset_ids": [...], "status": "...",
+        "count": N}`` where ``count`` is the number of repos in the
+        scan. Shape intentionally differs from the legacy multi-scan
+        return because there is now only ever one scan per call;
+        agent prompts that previously keyed off ``ai_scans[*].scan_id``
+        should switch to the top-level ``scan_id``.
+    :raises ValueError: If ``asset_ids`` is empty, exceeds 5, or
+        contains duplicates. Validated client-side so the agent gets a
+        clear error before burning a network round-trip.
+    :raises ApiError: If the server-side batch policy rejects the
+        request (e.g. tier doesn't include AI, account suspended,
+        asset inactive). The error includes the full server response
+        so the agent can show the user which asset was rejected.
     """
     if not asset_ids:
         raise ValueError("asset_ids is required: pass the assets to scan")
-
-    results: list[dict[str, Any]] = []
-    failed: list[dict[str, Any]] = []
-    for asset_id in asset_ids:
-        body = {
-            "asset_id": asset_id,
-            "scan_kind": "ai",
-            "trigger_type": "mcp",
-        }
-        try:
-            scan = client.post("/scans", body=body)
-        except ApiError as exc:
-            failed.append(
-                {
-                    "asset_id": asset_id,
-                    "status_code": exc.status_code,
-                    "message": str(exc),
-                }
-            )
-            continue
-        results.append(
-            {
-                "asset_id": asset_id,
-                "scan_id": scan.get("scan_id", ""),
-                "status": scan.get("status", "queued"),
-            }
+    if len(asset_ids) > _MAX_AI_SCAN_ASSETS:
+        raise ValueError(
+            f"AI scans support at most {_MAX_AI_SCAN_ASSETS} repositories "
+            f"per scan (got {len(asset_ids)})"
         )
-    return {"ai_scans": results, "failed": failed, "count": len(results)}
+    if len(set(asset_ids)) != len(asset_ids):
+        raise ValueError("asset_ids must be unique")
+
+    body = {
+        "asset_ids": list(asset_ids),
+        "scan_kind": "ai",
+        "trigger_type": "mcp",
+    }
+    scan = client.post("/scans", body=body)
+    return {
+        "scan_id": scan.get("scan_id", ""),
+        "asset_ids": list(asset_ids),
+        "status": scan.get("status", "queued"),
+        "count": len(asset_ids),
+    }
 
 
 def get_ai_scan_report(
