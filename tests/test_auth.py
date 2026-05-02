@@ -282,7 +282,9 @@ def test_exchange_code_posts_to_cognito_and_returns_token_set(
 
 def test_exchange_code_raises_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     manager = _make_manager("dev")
-    monkeypatch.setattr(manager._http, "post", MagicMock(return_value=FakeResponse(400, text="bad")))
+    monkeypatch.setattr(
+        manager._http, "post", MagicMock(return_value=FakeResponse(400, text="bad"))
+    )
 
     with pytest.raises(auth.AuthError, match="Token exchange failed: bad"):
         manager._exchange_code("auth-code", "http://localhost/callback", "verifier")

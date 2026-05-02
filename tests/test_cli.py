@@ -188,10 +188,10 @@ def test_serve_creates_server_and_runs_stdio_transport(monkeypatch: pytest.Monke
     monkeypatch.setattr(cli, "get_default_client_id", lambda stage: f"{stage}-client")
     monkeypatch.setattr(
         "scantonomous_mcp.server.create_server",
-        lambda client_id, stage: captured.update(
-            {"create_server": {"client_id": client_id, "stage": stage}}
-        )
-        or FakeServer(),
+        lambda client_id, stage: (
+            captured.update({"create_server": {"client_id": client_id, "stage": stage}})
+            or FakeServer()
+        ),
     )
     monkeypatch.setattr("mcp.server.stdio.stdio_server", lambda: FakeStdioServer())
 

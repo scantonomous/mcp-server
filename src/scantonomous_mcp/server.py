@@ -157,11 +157,17 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="create_ai_scan",
                 description=(
-                    "Create one or more AI-powered security scans. Uses a multi-phase AI "
-                    "pipeline (structural analysis, threat modeling, evidence gathering, "
-                    "AI judging) rather than traditional scanners. Use this for cross-repo "
-                    "threat analysis; use create_scan for traditional scanner coverage "
-                    "(dependency CVEs, secrets). One scan is created per asset_id. "
+                    "Create a single AI-powered security scan that spans 1-5 "
+                    "repositories as one cross-repo analysis. Uses a multi-phase AI "
+                    "pipeline (structural analysis, threat modeling, evidence "
+                    "gathering, AI judging) rather than traditional scanners. The "
+                    "scanner sees all selected repositories together so it can trace "
+                    "vulnerabilities across repository boundaries — useful for "
+                    "service + client pairs, microservices that share auth flows, "
+                    "or any set of repos that interoperate. One quota slot is "
+                    "consumed per multi-repo scan, regardless of how many "
+                    "repositories are included. Use create_scan for traditional "
+                    "single-repo scanner coverage (dependency CVEs, secrets). "
                     "Requires the Startup tier or higher."
                 ),
                 inputSchema={
@@ -171,7 +177,13 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "type": "array",
                             "items": {"type": "string"},
                             "minItems": 1,
-                            "description": "Asset IDs to scan. One AI scan is created per asset.",
+                            "maxItems": 5,
+                            "uniqueItems": True,
+                            "description": (
+                                "1-5 unique asset IDs to scan together as one "
+                                "cross-repo analysis. The order is preserved when "
+                                "the AI scanner reasons across repos."
+                            ),
                         },
                     },
                     "required": ["asset_ids"],
@@ -426,7 +438,22 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 )
             ]
         except ApiError as e:
-            return [TextContent(type="text", text=f"API error: {e}")]
+            # SCA-280 review: include the structured server payload
+            # (e.g. ``denied_asset_id``, ``quota``) so the agent can
+            # tell which selected repo to remove from a multi-asset
+            # batch failure. The shared client preserves the parsed
+            # JSON body on ``ApiError.payload``; serialize it as JSON
+            # alongside the human-readable summary so both
+            # text-following and structured-parsing agents can act
+            # on the response.
+            payload = {
+                "error": "api_error",
+                "status_code": e.status_code,
+                "message": str(e),
+            }
+            if e.payload is not None:
+                payload["details"] = e.payload
+            return [TextContent(type="text", text=json.dumps(payload, indent=2))]
 
     return server
 

@@ -14,10 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
-    """Raised when an API request fails."""
+    """Raised when an API request fails.
 
-    def __init__(self, status_code: int, message: str) -> None:
+    :ivar status_code: HTTP status code from the response.
+    :ivar payload: SCA-280 — full parsed JSON response body when the
+        server returned JSON, otherwise ``None``. Lets callers read
+        structured error fields like ``denied_asset_id``, ``quota``,
+        or any future server-side error metadata without re-parsing
+        the message string. The legacy ``message`` summary stays in
+        the exception args so existing callers and ``str(exc)`` keep
+        working unchanged.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
         self.status_code = status_code
+        self.payload = payload
         super().__init__(f"API error {status_code}: {message}")
 
 
@@ -97,11 +113,23 @@ class ScantonomousClient:
         resp = self._http.request(method, url, **kwargs)
 
         if resp.status_code >= 400:
+            payload: dict[str, Any] | None = None
             try:
-                detail = resp.json().get("message", resp.text)
+                parsed = resp.json()
             except (json.JSONDecodeError, ValueError):
                 detail = resp.text
-            raise ApiError(resp.status_code, detail)
+            else:
+                # SCA-280: keep the full structured payload so callers
+                # can surface server-side fields like denied_asset_id /
+                # quota that the batch policy returns on partial-asset
+                # rejections. Non-dict JSON (rare; arrays, etc.) is
+                # left as None and falls through to the text detail.
+                if isinstance(parsed, dict):
+                    payload = parsed
+                    detail = str(parsed.get("message", resp.text))
+                else:
+                    detail = resp.text
+            raise ApiError(resp.status_code, detail, payload=payload)
 
         if resp.status_code == 204:
             return {}
