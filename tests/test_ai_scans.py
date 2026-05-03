@@ -20,6 +20,11 @@ def test_create_ai_scan_raises_when_asset_ids_empty() -> None:
     client.post.assert_not_called()
 
 
+@pytest.mark.skip(
+    reason="SCA-299: cap is 1 while SCA-298 (cross-repo LLM analysis) is in flight; "
+    "the single-asset list shape is covered by "
+    "test_create_ai_scan_single_asset_uses_list_shape. Re-enable when the cap returns to 5."
+)
 def test_create_ai_scan_sends_one_request_with_asset_ids_list() -> None:
     """SCA-280: a single multi-repo POST replaces the legacy per-asset fan-out.
 
@@ -74,17 +79,17 @@ def test_create_ai_scan_single_asset_uses_list_shape() -> None:
     assert result["count"] == 1
 
 
-def test_create_ai_scan_rejects_more_than_5_assets() -> None:
-    """SCA-280: hard cap at 5 repos per AI scan, validated client-side.
+def test_create_ai_scan_rejects_more_than_one_asset() -> None:
+    """SCA-299: cap is 1 while SCA-298 (cross-repo LLM analysis) is in flight.
 
-    Server-side ``scan_authorize_consume_batch`` enforces the same cap
-    but sending 6+ over the wire would burn a network round-trip for
-    a deterministic-failure case. Reject early.
+    Server-side handler enforces the same cap; client-side validation
+    saves a network round-trip for a deterministic-failure case.
+    Returns to 5 once SCA-298 ships.
     """
     client = MagicMock()
-    too_many = [f"asset-{i}" for i in range(6)]
+    too_many = [f"asset-{i}" for i in range(2)]
 
-    with pytest.raises(ValueError, match="at most 5"):
+    with pytest.raises(ValueError, match="at most 1"):
         ai_scans.create_ai_scan(client, asset_ids=too_many)
 
     client.post.assert_not_called()
@@ -110,7 +115,7 @@ def test_create_ai_scan_propagates_server_error() -> None:
     client.post.side_effect = ApiError(403, "ai_scanner_not_in_tier")
 
     with pytest.raises(ApiError) as exc:
-        ai_scans.create_ai_scan(client, asset_ids=["asset-1", "asset-2"])
+        ai_scans.create_ai_scan(client, asset_ids=["asset-1"])
 
     assert exc.value.status_code == 403
     assert "ai_scanner_not_in_tier" in str(exc.value)
@@ -132,24 +137,22 @@ def test_create_ai_scan_preserves_batch_policy_payload_on_denial() -> None:
     """
     client = MagicMock()
     denial_payload = {
-        "message": "asset asset-2 is inactive",
-        "denied_asset_id": "asset-2",
+        "message": "asset asset-1 is inactive",
+        "denied_asset_id": "asset-1",
     }
     client.post.side_effect = ApiError(
         403,
-        "asset asset-2 is inactive",
+        "asset asset-1 is inactive",
         payload=denial_payload,
     )
 
     with pytest.raises(ApiError) as exc:
-        ai_scans.create_ai_scan(
-            client, asset_ids=["asset-1", "asset-2", "asset-3"]
-        )
+        ai_scans.create_ai_scan(client, asset_ids=["asset-1"])
 
     assert exc.value.status_code == 403
     # Structured fields survive — the agent can read denied_asset_id.
     assert exc.value.payload == denial_payload
-    assert exc.value.payload["denied_asset_id"] == "asset-2"
+    assert exc.value.payload["denied_asset_id"] == "asset-1"
 
 
 def test_create_ai_scan_preserves_quota_exceeded_payload() -> None:

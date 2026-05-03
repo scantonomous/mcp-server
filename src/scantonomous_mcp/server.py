@@ -157,18 +157,14 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="create_ai_scan",
                 description=(
-                    "Create a single AI-powered security scan that spans 1-5 "
-                    "repositories as one cross-repo analysis. Uses a multi-phase AI "
-                    "pipeline (structural analysis, threat modeling, evidence "
-                    "gathering, AI judging) rather than traditional scanners. The "
-                    "scanner sees all selected repositories together so it can trace "
-                    "vulnerabilities across repository boundaries — useful for "
-                    "service + client pairs, microservices that share auth flows, "
-                    "or any set of repos that interoperate. One quota slot is "
-                    "consumed per multi-repo scan, regardless of how many "
-                    "repositories are included. Use create_scan for traditional "
-                    "single-repo scanner coverage (dependency CVEs, secrets). "
-                    "Requires the Startup tier or higher."
+                    "Create a single AI-powered security scan over one "
+                    "repository (multi-repo cross-repo analysis is in flight under "
+                    "SCA-298 -- the cap returns to 5 once that ships). Uses a "
+                    "multi-phase AI pipeline (structural analysis, threat modeling, "
+                    "evidence gathering, AI judging) rather than traditional "
+                    "scanners. One quota slot is consumed per scan. Use "
+                    "create_scan for traditional scanner coverage (dependency "
+                    "CVEs, secrets). Requires the Startup tier or higher."
                 ),
                 inputSchema={
                     "type": "object",
@@ -177,12 +173,14 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "type": "array",
                             "items": {"type": "string"},
                             "minItems": 1,
-                            "maxItems": 5,
+                            "maxItems": 1,
                             "uniqueItems": True,
                             "description": (
-                                "1-5 unique asset IDs to scan together as one "
-                                "cross-repo analysis. The order is preserved when "
-                                "the AI scanner reasons across repos."
+                                "Currently capped at 1 unique asset id per scan "
+                                "(SCA-299, while SCA-298's cross-repo LLM "
+                                "analysis is in flight). The list shape is "
+                                "preserved so callers do not need to re-plumb "
+                                "when the cap returns to 5."
                             ),
                         },
                     },

@@ -154,20 +154,24 @@ def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch
     asyncio.run(_list_tools(server_instance))
     err = ApiError(
         403,
-        "asset asset-2 is inactive",
+        "asset asset-1 is inactive",
         payload={
-            "message": "asset asset-2 is inactive",
-            "denied_asset_id": "asset-2",
+            "message": "asset asset-1 is inactive",
+            "denied_asset_id": "asset-1",
             "quota": {"ai_scan_limit": 10, "ai_scans_used": 4},
         },
     )
     monkeypatch.setattr(server, "_dispatch_tool", AsyncMock(side_effect=err))
 
+    # SCA-299: cap is 1 while SCA-298 is in flight; the test argument
+    # was reduced from 3 assets to 1. The contract under test
+    # (structured ApiError payload survives the dispatch boundary) is
+    # independent of count.
     result = asyncio.run(
         _call_tool(
             server_instance,
             "create_ai_scan",
-            {"asset_ids": ["asset-1", "asset-2", "asset-3"]},
+            {"asset_ids": ["asset-1"]},
         )
     )
 
@@ -177,7 +181,7 @@ def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch
     assert body["status_code"] == 403
     # The structured fields the agent needs to act on are now in the
     # tool response, not buried in a string.
-    assert body["details"]["denied_asset_id"] == "asset-2"
+    assert body["details"]["denied_asset_id"] == "asset-1"
     assert body["details"]["quota"]["ai_scans_used"] == 4
     assert body["details"]["quota"]["ai_scan_limit"] == 10
 

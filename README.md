@@ -134,7 +134,7 @@ scantonomous-mcp --stage dev logout
 | `list_assets` | List connected repositories |
 | `create_scan` | Trigger a security scan |
 | `get_scan` | Check scan status |
-| `create_ai_scan` | AI-powered cross-repo scan covering 1-5 repositories in one analysis pass (Startup tier+). One quota slot consumed per scan regardless of repo count. |
+| `create_ai_scan` | AI-powered scan over 1 repository (Startup tier+). Multi-repo cross-repo analysis is in flight under SCA-298 — the cap returns to 5 once that ships. One quota slot consumed per scan. |
 | `get_ai_scan_report` | Executive summary synthesized from `GET /v1/scans/{id}` + AI-scoped findings |
 | `watch_ai_scan` | Poll an AI scan to terminal status (default 60-min timeout) |
 | `list_findings` | Search/filter findings |
