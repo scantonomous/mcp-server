@@ -48,25 +48,30 @@ _POLL_JITTER_SECONDS = 5
 _DEFAULT_TIMEOUT_MINUTES = 60
 
 
-#: SCA-280: hard cap on repos per AI scan (max 5). Mirrors the
-#: server-side cap enforced by ``scan_authorize_consume_batch``. Surface
-#: it client-side so the agent gets a clean ``ValueError`` instead of
-#: an HTTP 400 round-trip when it oversteps.
-_MAX_AI_SCAN_ASSETS = 5
+#: SCA-299: temporarily 1 while SCA-298 (cross-repo LLM analysis) is
+#: in flight. Mirrors the server-side cap on
+#: ``AiScanCreate.asset_ids`` (``maxItems: 1``) and the orchestrator
+#: worker's ``len > 1`` reject. Returns to 5 once SCA-298 lands.
+#: Surfaced client-side so the agent gets a clean ``ValueError``
+#: instead of an HTTP 400 round-trip when it oversteps.
+_MAX_AI_SCAN_ASSETS = 1
 
 
 def create_ai_scan(
     client: ScantonomousClient,
     asset_ids: list[str],
 ) -> dict[str, Any]:
-    """Create one AI-powered security scan over 1-5 repositories.
+    """Create one AI-powered security scan over a single repository.
 
-    SCA-280: AI scans are now a single multi-repo analysis pass — one
-    Scan record covers up to 5 ``asset_ids``, the orchestrator checks
-    them out in parallel, and a single AI scanner session reasons
-    across the full set. One quota slot is consumed per scan regardless
-    of repo count. This is the cross-repo capability the parent
-    SCA-272 issue promises.
+    SCA-280 introduced a single multi-repo analysis pass -- one Scan
+    record covers ``asset_ids``, the orchestrator checks the repos
+    out, and a single AI scanner session reasons over the full set.
+    One quota slot is consumed per scan regardless of repo count.
+
+    SCA-299 caps the request at 1 ``asset_id`` while SCA-298
+    (cross-repo LLM analysis) is in flight; the cap returns to 5 once
+    that lands. The list shape (``asset_ids: string[]``) is preserved
+    end-to-end so callers do not have to re-plumb on flip.
 
     The previous implementation fanned out client-side (one POST per
     asset, each tagged ``scan_kind="ai"``); each POST produced an
@@ -76,18 +81,20 @@ def create_ai_scan(
     with the full ``asset_ids`` list and the server-side batch policy
     consumes one slot atomically.
 
-    :param asset_ids: 1-5 unique asset IDs to scan together as one
-        cross-repo analysis. Order is preserved end-to-end (agent
-        selection → checkout Map → AI scanner LLM session).
+    :param asset_ids: Currently capped at 1 unique asset id per scan
+        (SCA-299, while SCA-298 is in flight). Order is preserved
+        end-to-end (agent selection → checkout Map → AI scanner LLM
+        session). Returns to 1-5 once SCA-298 ships.
     :returns: ``{"scan_id": "...", "asset_ids": [...], "status": "...",
         "count": N}`` where ``count`` is the number of repos in the
         scan. Shape intentionally differs from the legacy multi-scan
         return because there is now only ever one scan per call;
         agent prompts that previously keyed off ``ai_scans[*].scan_id``
         should switch to the top-level ``scan_id``.
-    :raises ValueError: If ``asset_ids`` is empty, exceeds 5, or
-        contains duplicates. Validated client-side so the agent gets a
-        clear error before burning a network round-trip.
+    :raises ValueError: If ``asset_ids`` is empty, exceeds the
+        ``_MAX_AI_SCAN_ASSETS`` cap, or contains duplicates. Validated
+        client-side so the agent gets a clear error before burning a
+        network round-trip.
     :raises ApiError: If the server-side batch policy rejects the
         request (e.g. tier doesn't include AI, account suspended,
         asset inactive, quota exceeded). ``ApiError.payload`` carries
@@ -100,13 +107,18 @@ def create_ai_scan(
     """
     if not asset_ids:
         raise ValueError("asset_ids is required: pass the assets to scan")
+    # SCA-299: dup check must precede the cap check -- under the
+    # tightened cap (1) a duplicate input of length 2 would otherwise
+    # hit the cap message and mask the more-specific "asset_ids must
+    # be unique" feedback. Reorder is safe: dups are always invalid
+    # regardless of cap.
+    if len(set(asset_ids)) != len(asset_ids):
+        raise ValueError("asset_ids must be unique")
     if len(asset_ids) > _MAX_AI_SCAN_ASSETS:
         raise ValueError(
             f"AI scans support at most {_MAX_AI_SCAN_ASSETS} repositories "
             f"per scan (got {len(asset_ids)})"
         )
-    if len(set(asset_ids)) != len(asset_ids):
-        raise ValueError("asset_ids must be unique")
 
     body = {
         "asset_ids": list(asset_ids),
