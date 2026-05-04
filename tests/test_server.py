@@ -49,6 +49,29 @@ def test_create_server_wires_auth_manager_and_client(monkeypatch) -> None:
     assert isinstance(result, Server)
 
 
+def test_create_server_instructions_warn_about_untrusted_tool_results() -> None:
+    """SCA-311: server instructions must tell the agent that natural-language
+    text in repository content — both tool-result free-text fields AND text
+    read directly from source files (comments, docstrings, string literals,
+    READMEs) — is attacker-controlled and not to be followed as instructions.
+    Removing this guard, or narrowing it to only cover tool-result text,
+    reopens a prompt-injection path into triage_finding.
+    """
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+
+    instructions = server_instance.instructions or ""
+    lowered = instructions.lower()
+
+    assert "untrusted" in lowered
+    assert "prompt-injection" in lowered
+    assert "triage_finding" in instructions
+    # Source-file text must be in scope, not just tool-result text.
+    assert "comments" in lowered
+    # The safe basis for autonomous triage is executable semantics, not
+    # any free-text source-code review.
+    assert "executable" in lowered
+
+
 def test_create_server_registers_expected_tools_and_populates_cache() -> None:
     server_instance = server.create_server(client_id="client-123", stage="dev")
 
