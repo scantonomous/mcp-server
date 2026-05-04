@@ -49,6 +49,20 @@ def test_create_server_wires_auth_manager_and_client(monkeypatch) -> None:
     assert isinstance(result, Server)
 
 
+def test_create_server_instructions_warn_about_untrusted_tool_results() -> None:
+    """SCA-311: server instructions must tell the agent that tool-result
+    free-text fields are attacker-controlled and not to be followed as
+    instructions. Removing this guard reopens a prompt-injection path
+    from scanned repository content into triage_finding.
+    """
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+
+    instructions = server_instance.instructions or ""
+    assert "untrusted" in instructions.lower()
+    assert "prompt-injection" in instructions.lower()
+    assert "triage_finding" in instructions
+
+
 def test_create_server_registers_expected_tools_and_populates_cache() -> None:
     server_instance = server.create_server(client_id="client-123", stage="dev")
 
