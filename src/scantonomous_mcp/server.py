@@ -400,14 +400,22 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         "reason": {
                             "type": "string",
                             "maxLength": 1000,
+                            "pattern": r"^[A-Za-z0-9 .,;:!?()_\r\n-]{0,1000}$",
                             "description": (
                                 "Explanation for the decision. Required for false_positive "
                                 "and accepted_risk. For fixed, describe the fix applied. "
                                 "For false_positive, explain specifically why the attack "
-                                "path is non-exploitable — e.g. the line that prevents it, "
-                                "a control that fully mitigates it, or why the context makes "
+                                "path is non-exploitable: the line that prevents it, a "
+                                "control that fully mitigates it, or why the context makes "
                                 "it unexploitable (test-only code, internal endpoint with no "
-                                "external access). Vague reasons undermine the audit trail."
+                                "external access). Vague reasons undermine the audit trail. "
+                                "ALLOWED CHARACTERS ONLY: letters, digits, space, the "
+                                "punctuation . , ; : ! ? ( ) _ - , and newlines. "
+                                "Backticks, slashes, brackets, braces, em-dashes, quotes, "
+                                "asterisks, equals, and any other character will be rejected "
+                                "by the server with HTTP 400. Write in plain prose: spell out "
+                                "paths (say 'v1 webhooks stripe' not '/v1/webhooks/stripe') "
+                                "and code identifiers (say 'the foo function' not '`foo()`')."
                             ),
                         },
                         "ai_model": {
