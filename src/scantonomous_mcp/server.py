@@ -420,10 +420,20 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "ai_model": {
                             "type": "string",
+                            "pattern": r"^[A-Za-z0-9 ._:/-]{1,200}$",
                             "description": (
-                                "The AI model and version performing the triage "
-                                "(e.g., 'Claude Opus 4.6', 'GPT-4o'). "
-                                "Self-report your model name."
+                                "The AI model and version performing the triage. "
+                                "Self-report your model name. "
+                                "ALLOWED CHARACTERS ONLY: letters, digits, space, "
+                                "and the punctuation . _ : / -. Min length 1, max 200. "
+                                "Parens, commas, plus signs, backticks, brackets, and any "
+                                "other character are rejected by the server with HTTP 400. "
+                                "Write plain labels without vendor-style parenthesized "
+                                "variant suffixes: 'Claude Opus 4.7' not "
+                                "'Claude Opus 4.7 (1M context)'; 'GPT-4o-2024-08-06' not "
+                                "'GPT-4o (2024-08-06)'. Note: this allowlist is similar to "
+                                "but stricter than the one on the reason field, and unlike "
+                                "reason it does permit the / character."
                             ),
                         },
                     },
