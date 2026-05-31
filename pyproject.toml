@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scantonomous-mcp"
-version = "0.3.2"
+version = "0.3.3"
 description = "Scantonomous MCP server for AI agent integration"
 requires-python = ">=3.13"
 license = "MIT"
