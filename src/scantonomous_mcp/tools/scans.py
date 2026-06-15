@@ -9,6 +9,7 @@ from typing import Any
 from ..client import ApiError, ScantonomousClient
 
 TERMINAL_STATUSES = {"completed", "failed", "canceled"}
+_ALLOWED_SCAN_KINDS = {"standard", "dast", "recon"}
 _POLL_BASE_SECONDS = 30
 _POLL_JITTER_SECONDS = 5
 _DEFAULT_TIMEOUT_MINUTES = 30
@@ -46,17 +47,30 @@ def create_scan(
     client: ScantonomousClient,
     asset_id: str,
     ref: str | None = None,
+    scan_kind: str | None = None,
 ) -> dict[str, Any]:
     """Trigger a security scan on an asset.
 
     :param asset_id: The asset (repository) to scan.
     :param ref: Optional git ref (branch, tag, commit) to scan. Defaults to the
         default branch.
+    :param scan_kind: Optional scan kind: ``"standard"`` (code analysis),
+        ``"dast"`` (web app security), or ``"recon"`` (web reconnaissance).
+        Omit for a standard scan.  AI scans must use ``create_ai_scan``.
     :returns: Scan object with id and status.
+    :raises ValueError: If *scan_kind* is not in the allowed set.
     """
+    if scan_kind is not None and scan_kind not in _ALLOWED_SCAN_KINDS:
+        raise ValueError(
+            f"Invalid scan_kind {scan_kind!r}. "
+            f"Allowed values: {sorted(_ALLOWED_SCAN_KINDS)}. "
+            "AI scans must use create_ai_scan."
+        )
     body: dict[str, Any] = {"asset_id": asset_id, "trigger_type": "mcp"}
     if ref:
         body["ref"] = ref
+    if scan_kind is not None:
+        body["scan_kind"] = scan_kind
     return client.post("/scans", body=body)
 
 

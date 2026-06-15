@@ -169,6 +169,15 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "type": "string",
                             "description": "Optional git ref (branch, tag, commit SHA) to scan. Defaults to the default branch.",
                         },
+                        "scan_kind": {
+                            "type": "string",
+                            "enum": ["standard", "dast", "recon"],
+                            "description": (
+                                "Scan kind: standard (code analysis), "
+                                "dast (web app security), or recon (web reconnaissance). "
+                                "Omit for a standard scan. AI scans use create_ai_scan."
+                            ),
+                        },
                     },
                     "required": ["asset_id"],
                 },
@@ -537,7 +546,12 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
         case "list_assets":
             return scans.list_assets(api, query=args.get("query"), limit=args.get("limit", 25))
         case "create_scan":
-            return scans.create_scan(api, asset_id=args["asset_id"], ref=args.get("ref"))
+            return scans.create_scan(
+                api,
+                asset_id=args["asset_id"],
+                ref=args.get("ref"),
+                scan_kind=args.get("scan_kind"),
+            )
         case "get_scan":
             return scans.get_scan(api, scan_id=args["scan_id"])
         case "watch_scan":
