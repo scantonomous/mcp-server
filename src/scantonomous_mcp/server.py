@@ -171,11 +171,14 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "scan_kind": {
                             "type": "string",
-                            "enum": ["standard", "dast", "recon"],
+                            "enum": ["standard"],
                             "description": (
-                                "Scan kind: standard (code analysis), "
-                                "dast (web app security), or recon (web reconnaissance). "
-                                "Omit for a standard scan. AI scans use create_ai_scan."
+                                "Scan kind: only 'standard' (code analysis) is "
+                                "currently available. Omit for a standard scan. "
+                                "Web-app scans (recon/DAST) are coming in a later "
+                                "release — use the asset onboarding flow in the "
+                                "Scantonomous web app to configure them. "
+                                "AI scans use create_ai_scan."
                             ),
                         },
                     },

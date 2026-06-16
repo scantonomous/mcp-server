@@ -31,6 +31,19 @@ build = [
     "hatchling==1.28.0",
 ]
 
+[tool.uv]
+# SCA-422: bump transitive deps past freshly-published CVEs (constraint-only;
+# they stay transitive):
+#   - starlette 1.3.1 — CVE-2026-54282/54283 (URL-host confusion + form-limit DoS)
+#   - python-multipart 0.0.31 — CVE-2026-53538 (separator differential) +
+#     CVE-2026-53540 (negative Content-Length unbounded read)
+#   - cryptography 49.0.0 — GHSA-537c-gmf6-5ccf (statically-linked OpenSSL)
+constraint-dependencies = [
+    "starlette==1.3.1",
+    "python-multipart==0.0.31",
+    "cryptography==49.0.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/scantonomous_mcp"]
 

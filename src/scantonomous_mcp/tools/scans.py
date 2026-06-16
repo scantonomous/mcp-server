@@ -9,7 +9,9 @@ from typing import Any
 from ..client import ApiError, ScantonomousClient
 
 TERMINAL_STATUSES = {"completed", "failed", "canceled"}
-_ALLOWED_SCAN_KINDS = {"standard", "dast", "recon"}
+# Only "standard" is runnable today.  "recon" and "dast" will be enabled here
+# once the execution consumers land in SCA-422 Phases 3/4.
+_ALLOWED_SCAN_KINDS = {"standard"}
 _POLL_BASE_SECONDS = 30
 _POLL_JITTER_SECONDS = 5
 _DEFAULT_TIMEOUT_MINUTES = 30
@@ -54,12 +56,20 @@ def create_scan(
     :param asset_id: The asset (repository) to scan.
     :param ref: Optional git ref (branch, tag, commit) to scan. Defaults to the
         default branch.
-    :param scan_kind: Optional scan kind: ``"standard"`` (code analysis),
-        ``"dast"`` (web app security), or ``"recon"`` (web reconnaissance).
-        Omit for a standard scan.  AI scans must use ``create_ai_scan``.
+    :param scan_kind: Optional scan kind. Only ``"standard"`` (code analysis)
+        is currently runnable; omit for a standard scan.  ``"recon"`` and
+        ``"dast"`` are not yet available (SCA-422 Phases 3/4).
+        AI scans must use ``create_ai_scan``.
     :returns: Scan object with id and status.
-    :raises ValueError: If *scan_kind* is not in the allowed set.
+    :raises ValueError: If *scan_kind* is ``"recon"`` or ``"dast"`` (not yet
+        available) or is otherwise not in the allowed set.
     """
+    if scan_kind in {"recon", "dast"}:
+        raise ValueError(
+            f"scan_kind {scan_kind!r} is not yet available via create_scan — "
+            "web-scan (recon/DAST) execution ships in a later SCA-422 phase. "
+            "Use scan_kind='standard' or omit scan_kind for a standard scan."
+        )
     if scan_kind is not None and scan_kind not in _ALLOWED_SCAN_KINDS:
         raise ValueError(
             f"Invalid scan_kind {scan_kind!r}. "

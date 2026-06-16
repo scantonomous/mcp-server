@@ -60,29 +60,24 @@ def test_create_scan_includes_ref_when_provided() -> None:
     )
 
 
-def test_create_scan_with_scan_kind_dast_includes_scan_kind_in_body() -> None:
+def test_create_scan_with_scan_kind_dast_raises_not_yet_available() -> None:
+    """dast scans are not yet executable (no consumer until SCA-422 Phase 3/4)."""
     client = MagicMock()
-    client.post.return_value = {"scan_id": "scan-2"}
 
-    result = scans.create_scan(client, asset_id="asset-1", scan_kind="dast")
+    with pytest.raises(ValueError, match="not yet available"):
+        scans.create_scan(client, asset_id="asset-1", scan_kind="dast")
 
-    client.post.assert_called_once_with(
-        "/scans",
-        body={"asset_id": "asset-1", "trigger_type": "mcp", "scan_kind": "dast"},
-    )
-    assert result == {"scan_id": "scan-2"}
+    client.post.assert_not_called()
 
 
-def test_create_scan_with_scan_kind_recon_includes_scan_kind_in_body() -> None:
+def test_create_scan_with_scan_kind_recon_raises_not_yet_available() -> None:
+    """recon scans are not yet executable (no consumer until SCA-422 Phase 3/4)."""
     client = MagicMock()
-    client.post.return_value = {"scan_id": "scan-3"}
 
-    scans.create_scan(client, asset_id="asset-1", scan_kind="recon")
+    with pytest.raises(ValueError, match="not yet available"):
+        scans.create_scan(client, asset_id="asset-1", scan_kind="recon")
 
-    client.post.assert_called_once_with(
-        "/scans",
-        body={"asset_id": "asset-1", "trigger_type": "mcp", "scan_kind": "recon"},
-    )
+    client.post.assert_not_called()
 
 
 def test_create_scan_with_scan_kind_standard_includes_scan_kind_in_body() -> None:
