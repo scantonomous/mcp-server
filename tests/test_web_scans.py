@@ -43,8 +43,7 @@ def test_create_dast_scan_maps_policy_denials(message: str, status: str) -> None
 
     result = web_scans.create_dast_scan(client, web_asset_id="web-1")
 
-    assert result["status"] == status
-    assert "next" in result
+    assert result == web_scans._REJECTION_GUIDANCE[message]
 
 
 def test_create_dast_scan_reraises_unknown_api_error() -> None:

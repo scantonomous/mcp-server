@@ -75,6 +75,40 @@ def test_list_assets_kind_filter_web_only() -> None:
     assert [a["asset_id"] for a in result["assets"]] == ["web-1"]
 
 
+def test_list_assets_kind_filter_repo_only() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/y"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443,
+             "effective_verification": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+    result = scans.list_assets(client, kind="repo")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["repo-1"]
+
+
+def test_list_assets_kind_all_returns_both() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/y"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443,
+             "effective_verification": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+    result = scans.list_assets(client, kind="all")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["repo-1", "web-1"]
+
+
 def test_create_scan_sets_mcp_trigger_type() -> None:
     client = MagicMock()
     client.post.return_value = {"scan_id": "scan-1"}
