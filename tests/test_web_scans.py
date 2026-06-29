@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from scantonomous_mcp.client import ApiError
 from scantonomous_mcp.tools import web_scans
@@ -52,3 +53,41 @@ def test_create_dast_scan_reraises_unknown_api_error() -> None:
 
     with pytest.raises(ApiError, match="boom"):
         web_scans.create_dast_scan(client, web_asset_id="web-1")
+
+
+def test_watch_dast_scan_returns_on_terminal() -> None:
+    client = MagicMock()
+    client.get.return_value = {"status": "completed", "scan_id": "scan-1"}
+
+    result = asyncio.run(web_scans.watch_dast_scan(client, scan_id="scan-1"))
+
+    client.get.assert_called_once_with("/scans/scan-1")
+    assert result == {"status": "completed", "scan_id": "scan-1"}
+
+
+def test_watch_dast_scan_surfaces_failure_error_code() -> None:
+    client = MagicMock()
+    client.get.return_value = {
+        "status": "failed", "scan_id": "scan-1", "error_code": "dns_unresolved"
+    }
+
+    result = asyncio.run(web_scans.watch_dast_scan(client, scan_id="scan-1"))
+
+    assert result["status"] == "failed"
+    assert result["error_code"] == "dns_unresolved"
+
+
+def test_watch_dast_scan_timeout_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = MagicMock()
+    client.get.side_effect = [{"status": "running"}, {"status": "running"}]
+    monkeypatch.setattr(web_scans.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(web_scans.random, "uniform", lambda _a, _b: 0.0)
+
+    result = asyncio.run(web_scans.watch_dast_scan(client, scan_id="scan-1", timeout_minutes=1))
+
+    assert result == {
+        "status": "timeout",
+        "message": "DAST scan did not complete within 1 minutes.",
+        "last_known_status": "running",
+        "scan_id": "scan-1",
+    }

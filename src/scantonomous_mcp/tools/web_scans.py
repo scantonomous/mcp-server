@@ -13,9 +13,16 @@ Server prerequisites:
 
 from __future__ import annotations
 
+import asyncio
+import random
 from typing import Any
 
 from ..client import ApiError, ScantonomousClient
+
+_TERMINAL_STATUSES = {"completed", "failed", "canceled"}
+_POLL_BASE_SECONDS = 30
+_POLL_JITTER_SECONDS = 5
+_DEFAULT_TIMEOUT_MINUTES = 60
 
 #: Exact server policy-denial messages (serialized under ``ApiError.payload["message"]``
 #: by the scan handler — there is no ``reason`` key) mapped to friendly guidance.
@@ -87,4 +94,50 @@ def create_dast_scan(
         "scan_id": scan.get("scan_id", ""),
         "status": scan.get("status", "queued"),
         "asset_id": web_asset_id,
+    }
+
+
+async def watch_dast_scan(
+    client: ScantonomousClient,
+    scan_id: str,
+    timeout_minutes: int = _DEFAULT_TIMEOUT_MINUTES,
+) -> dict[str, Any]:
+    """Poll a DAST scan until it reaches a terminal status.
+
+    Polls every 25–35 s (30 s ± 5 s jitter). DAST runs on its own state machine
+    (recon then the scanner), so the default timeout is 60 min. On ``failed``, the
+    returned scan object carries the server ``error_code`` / ``error_message`` (the
+    web-scan failure taxonomy, incl. a terminal recon failure), so the agent can
+    explain the cause.
+
+    :param scan_id: The DAST scan ID to watch.
+    :param timeout_minutes: Maximum time to wait in minutes (default 60).
+    :returns: The final scan object on terminal status, or a structured timeout dict.
+    """
+    timeout_seconds = timeout_minutes * 60
+    elapsed = 0.0
+    last_known_status = "unknown"
+
+    while elapsed < timeout_seconds:
+        scan = client.get(f"/scans/{scan_id}")
+        last_known_status = str(scan.get("status", ""))
+        if last_known_status in _TERMINAL_STATUSES:
+            return scan
+
+        delay = _POLL_BASE_SECONDS + random.uniform(  # noqa: S311  # nosec B311
+            -_POLL_JITTER_SECONDS, _POLL_JITTER_SECONDS
+        )
+        remaining = timeout_seconds - elapsed
+        delay = min(delay, remaining)
+        if delay <= 0:
+            break
+
+        await asyncio.sleep(delay)
+        elapsed += delay
+
+    return {
+        "status": "timeout",
+        "message": f"DAST scan did not complete within {timeout_minutes} minutes.",
+        "last_known_status": last_known_status,
+        "scan_id": scan_id,
     }
