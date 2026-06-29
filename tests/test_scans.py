@@ -11,28 +11,102 @@ from scantonomous_mcp.client import ApiError
 from scantonomous_mcp.tools import scans
 
 
-def test_list_assets_builds_account_path_and_maps_repo_path() -> None:
+def test_list_assets_maps_repo_path_and_asset_type() -> None:
     client = MagicMock()
     client.get_account_id.return_value = "acct-123"
     client.get.return_value = {
         "items": [
-            {"asset_id": "asset-1", "repo_path": "scantonomous/services"},
-            {"asset_id": "asset-2", "name": "fallback-name"},
+            {"asset_id": "asset-1", "asset_type": "code_repository",
+             "repo_path": "scantonomous/services"},
+            {"asset_id": "asset-2", "asset_type": "code_repository", "name": "fallback-name"},
         ]
     }
 
     result = scans.list_assets(client, query="services", limit=10)
 
     client.get.assert_called_once_with(
-        "/account/acct-123/assets",
-        params={"limit": 10, "query": "services"},
+        "/account/acct-123/assets", params={"limit": 10, "query": "services"}
     )
     assert result == {
         "assets": [
-            {"asset_id": "asset-1", "repo_path": "scantonomous/services"},
-            {"asset_id": "asset-2", "repo_path": "fallback-name"},
+            {"asset_id": "asset-1", "asset_type": "code_repository",
+             "repo_path": "scantonomous/services"},
+            {"asset_id": "asset-2", "asset_type": "code_repository", "repo_path": "fallback-name"},
         ]
     }
+
+
+def test_list_assets_shapes_web_endpoint_fields() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "shop.example.com", "port": 443,
+             "effective_verification": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+    result = scans.list_assets(client)
+
+    assert result == {
+        "assets": [
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "repo_path": "",
+             "origin": "https://shop.example.com:443",
+             "verification_status": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+
+def test_list_assets_kind_filter_web_only() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/y"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443,
+             "effective_verification": "unverified", "analysis_state": "legacy"},
+        ]
+    }
+
+    result = scans.list_assets(client, kind="web")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["web-1"]
+
+
+def test_list_assets_kind_filter_repo_only() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/y"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443,
+             "effective_verification": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+    result = scans.list_assets(client, kind="repo")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["repo-1"]
+
+
+def test_list_assets_kind_all_returns_both() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/y"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443,
+             "effective_verification": "verified", "analysis_state": "analyzed"},
+        ]
+    }
+
+    result = scans.list_assets(client, kind="all")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["repo-1", "web-1"]
 
 
 def test_create_scan_sets_mcp_trigger_type() -> None:

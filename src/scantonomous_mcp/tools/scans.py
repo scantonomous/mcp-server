@@ -21,12 +21,20 @@ def list_assets(
     client: ScantonomousClient,
     query: str | None = None,
     limit: int = 25,
+    kind: str = "all",
 ) -> dict[str, Any]:
-    """List connected repositories/assets.
+    """List connected assets — code repositories and web applications.
 
-    :param query: Optional search query to filter assets.
+    :param query: Optional search query to filter assets by name.
     :param limit: Maximum number of results (default 25).
-    :returns: Slim list of assets with id and repo path for easy matching.
+    :param kind: ``"all"`` (default), ``"repo"`` (code repositories only), or
+        ``"web"`` (web_endpoint assets only).
+    :returns: ``{"assets": [...]}``. Every asset carries ``asset_id`` and
+        ``asset_type``; code repositories carry ``repo_path``; ``web_endpoint``
+        assets additionally carry ``origin`` (``scheme://fqdn:port``),
+        ``verification_status``, and ``analysis_state`` (passed through verbatim —
+        wire states include ``legacy``/``pending``/``pending_enqueue``/
+        ``analyzed``/``failed``).
     """
     account_id = client.get_account_id()
     params: dict[str, Any] = {"limit": limit}
@@ -34,15 +42,25 @@ def list_assets(
         params["query"] = query
     data = client.get(f"/account/{account_id}/assets", params=params)
     items = data.get("items", [])
-    return {
-        "assets": [
-            {
-                "asset_id": a["asset_id"],
-                "repo_path": a.get("repo_path", a.get("name", "")),
-            }
-            for a in items
-        ],
-    }
+
+    assets: list[dict[str, Any]] = []
+    for a in items:
+        asset_type = a.get("asset_type", "code_repository")
+        if kind == "repo" and asset_type != "code_repository":
+            continue
+        if kind == "web" and asset_type != "web_endpoint":
+            continue
+        entry: dict[str, Any] = {
+            "asset_id": a["asset_id"],
+            "asset_type": asset_type,
+            "repo_path": a.get("repo_path", a.get("name", "")),
+        }
+        if asset_type == "web_endpoint":
+            entry["origin"] = f"{a.get('scheme', '')}://{a.get('fqdn', '')}:{a.get('port', '')}"
+            entry["verification_status"] = a.get("effective_verification", "unverified")
+            entry["analysis_state"] = a.get("analysis_state", "")
+        assets.append(entry)
+    return {"assets": assets}
 
 
 def create_scan(
