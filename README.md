@@ -175,3 +175,7 @@ uv run inv build         # clean + lint + security + test (full CI gate)
 uv run inv clean         # remove caches and build artifacts
 uv run inv publish --version=X.Y.Z  # bump version, build wheel, create GitHub Release
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
