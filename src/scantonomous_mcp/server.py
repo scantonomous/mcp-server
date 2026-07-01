@@ -11,7 +11,7 @@ from mcp.types import TextContent, Tool
 
 from .auth import AuthError, AuthManager
 from .client import ApiError, ScantonomousClient
-from .tools import ai_scans, findings, scans, triage
+from .tools import ai_scans, findings, scans, triage, web_scans
 
 logger = logging.getLogger(__name__)
 
@@ -133,9 +133,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="list_assets",
                 description=(
-                    "List connected repositories and assets. Returns asset_id and "
-                    "repo_path (e.g. 'scantonomous/services') for each asset. Use "
-                    "the asset_id with create_scan or list_findings."
+                    "List connected assets — code repositories and web applications. "
+                    "Each asset has asset_id and asset_type ('code_repository' or "
+                    "'web_endpoint'). Web apps also include origin (scheme://fqdn:port), "
+                    "verification_status, and analysis_state. Use kind='web' to list only "
+                    "web apps. Use the asset_id with create_scan (repos) or create_dast_scan "
+                    "(web apps)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -148,6 +151,12 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                             "type": "integer",
                             "description": "Maximum number of results (default 25).",
                             "default": 25,
+                        },
+                        "kind": {
+                            "type": "string",
+                            "enum": ["all", "repo", "web"],
+                            "description": "Filter by asset kind (default 'all').",
+                            "default": "all",
                         },
                     },
                 },
@@ -168,6 +177,18 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         "ref": {
                             "type": "string",
                             "description": "Optional git ref (branch, tag, commit SHA) to scan. Defaults to the default branch.",
+                        },
+                        "scan_kind": {
+                            "type": "string",
+                            "enum": ["standard"],
+                            "description": (
+                                "Scan kind: only 'standard' (code analysis) is "
+                                "currently available. Omit for a standard scan. "
+                                "Web-app scans (recon/DAST) are coming in a later "
+                                "release — use the asset onboarding flow in the "
+                                "Scantonomous web app to configure them. "
+                                "AI scans use create_ai_scan."
+                            ),
                         },
                     },
                     "required": ["asset_id"],
@@ -284,6 +305,48 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                     },
                     "required": ["ai_scan_id"],
+                },
+            ),
+            Tool(
+                name="create_dast_scan",
+                description=(
+                    "Run a DAST (dynamic web application security) scan against a verified "
+                    "web_endpoint asset. List web apps with list_assets(kind='web'). The scan "
+                    "runs reconnaissance then an OWASP ZAP passive scan; findings are read like "
+                    "any other scan (get_scan, list_findings). If the asset isn't verified or "
+                    "the tier lacks DAST, the tool returns a {status, next} hint. Requires the "
+                    "Startup tier or higher."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "web_asset_id": {
+                            "type": "string",
+                            "description": "The web_endpoint asset ID to scan.",
+                        },
+                    },
+                    "required": ["web_asset_id"],
+                },
+            ),
+            Tool(
+                name="watch_dast_scan",
+                description=(
+                    "Wait for a DAST scan to complete by polling every ~30 seconds. Returns the "
+                    "final scan record once terminal (completed, failed, or canceled). DAST runs "
+                    "recon then the scanner, so the default timeout is 60 minutes. On failure the "
+                    "record carries error_code (e.g. dns_unresolved, tls_error, blocked)."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "scan_id": {"type": "string", "description": "The DAST scan ID to watch."},
+                        "timeout_minutes": {
+                            "type": "integer",
+                            "description": "Maximum time to wait in minutes (default 60).",
+                            "default": 60,
+                        },
+                    },
+                    "required": ["scan_id"],
                 },
             ),
             Tool(
@@ -535,9 +598,19 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
     """Route a tool call to the appropriate handler."""
     match name:
         case "list_assets":
-            return scans.list_assets(api, query=args.get("query"), limit=args.get("limit", 25))
+            return scans.list_assets(
+                api,
+                query=args.get("query"),
+                limit=args.get("limit", 25),
+                kind=args.get("kind", "all"),
+            )
         case "create_scan":
-            return scans.create_scan(api, asset_id=args["asset_id"], ref=args.get("ref"))
+            return scans.create_scan(
+                api,
+                asset_id=args["asset_id"],
+                ref=args.get("ref"),
+                scan_kind=args.get("scan_kind"),
+            )
         case "get_scan":
             return scans.get_scan(api, scan_id=args["scan_id"])
         case "watch_scan":
@@ -580,6 +653,14 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
                 finding_ids=args.get("finding_ids"),
                 ecd=args.get("ecd"),
                 approval_reference=args.get("approval_reference"),
+            )
+        case "create_dast_scan":
+            return web_scans.create_dast_scan(api, web_asset_id=args["web_asset_id"])
+        case "watch_dast_scan":
+            return await web_scans.watch_dast_scan(
+                api,
+                scan_id=args["scan_id"],
+                timeout_minutes=args.get("timeout_minutes", 60),
             )
         case "get_findings_summary":
             return triage.get_findings_summary(api, scan_id=args.get("scan_id"))

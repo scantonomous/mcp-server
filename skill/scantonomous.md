@@ -67,3 +67,10 @@ Always document the compensating controls in the `reason` field.
 - After `create_scan`, poll `get_scan` until status is `completed` before fetching findings
 - Use `list_findings` with `scan_id` to see findings from a specific scan
 - The `get_finding` response includes enough context (file path, line numbers, code snippet) to locate and fix the issue
+
+## Web application (DAST) scanning
+
+1. `list_assets(kind="web")` — list the customer's verified web apps (origin, verification_status, analysis_state).
+2. `create_dast_scan(web_asset_id)` — start the scan. If it returns `{status: "not_verified" | "wrong_asset_type" | "tier_unavailable"}`, relay the `next` hint to the user (ownership verification is a one-time step in the web UI). You do NOT need recon to be ready first — the server runs it internally.
+3. `watch_dast_scan(scan_id)` — wait for completion (default 60 min). On `failed`, read `error_code` (e.g. `dns_unresolved`, `tls_error`, `blocked`) to explain why.
+4. Read findings like any scan: `get_scan(scan_id)`, then `list_findings(scan_id=...)` / `get_finding(...)`. Web findings carry url + locus + scanner_guidance instead of file/line.
