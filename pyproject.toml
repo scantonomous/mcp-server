@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scantonomous-mcp"
-version = "0.3.6"
+version = "0.3.7"
 description = "Scantonomous MCP server for AI agent integration"
 requires-python = ">=3.13"
 license = "MIT"
 dependencies = [
-    "mcp==1.26.0",
+    "mcp==1.28.1",
     "httpx==0.28.1",
     "keyring==25.7.0",
-    "click==8.3.1",
+    "click==8.4.2",
 ]
 
 [project.scripts]
@@ -20,15 +20,15 @@ scantonomous-mcp = "scantonomous_mcp.cli:main"
 
 [dependency-groups]
 build = [
-    "invoke==2.2.1",
-    "pytest==9.0.3",
-    "ruff==0.15.6",
-    "pyright==1.1.408",
+    "invoke==3.0.3",
+    "pytest==9.1.1",
+    "ruff==0.15.20",
+    "pyright==1.1.411",
     "bandit==1.9.4",
-    "pip-audit==2.10.0",
+    "pip-audit==2.10.1",
     "detect-secrets==1.5.0",
-    "pinstack==0.1.5",
-    "hatchling==1.28.0",
+    "pinstack==0.2.0",
+    "hatchling==1.31.0",
 ]
 
 [tool.uv]
