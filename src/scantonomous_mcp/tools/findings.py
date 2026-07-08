@@ -29,11 +29,12 @@ def list_findings(
     :param asset_id: Filter to findings for this asset/repository. Resolves
         the asset to its ``source_repository`` and queries OpenSearch
         directly. Ignored if ``scan_id`` is provided.
-    :param limit: Maximum number of results (default 25).
+    :param limit: Maximum number of results (default 25, API maximum 200).
     :param cursor: Opaque pagination cursor returned as ``next_cursor`` by a
-        previous response.
+        previous response. Use either ``cursor`` or ``offset``, not both.
     :param offset: Numeric pagination offset for endpoints and filter
-        combinations that use offset-based pagination.
+        combinations that use offset-based pagination. Use either ``offset``
+        or ``cursor``, not both.
     :returns: List of findings with summary info.
     """
     source_repository: str | None = None

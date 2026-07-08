@@ -127,7 +127,9 @@ def test_create_server_registers_expected_tools_and_populates_cache() -> None:
     list_findings_schema = tools_by_name["list_findings"].inputSchema["properties"]
     assert list_findings_schema["limit"]["maximum"] == 200
     assert list_findings_schema["cursor"]["description"].startswith("Opaque pagination cursor")
+    assert "either cursor or offset" in list_findings_schema["cursor"]["description"]
     assert list_findings_schema["offset"]["minimum"] == 0
+    assert "scan_id queries" in list_findings_schema["offset"]["description"]
 
 
 def test_create_server_registers_dast_tools() -> None:

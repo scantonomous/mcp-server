@@ -401,12 +401,19 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "cursor": {
                             "type": "string",
-                            "description": "Opaque pagination cursor from the previous response's next_cursor field.",
+                            "description": (
+                                "Opaque pagination cursor from the previous response's "
+                                "next_cursor field. Use either cursor or offset, not both."
+                            ),
                             "maxLength": 1024,
                         },
                         "offset": {
                             "type": "integer",
-                            "description": "Numeric result offset for offset-based pagination.",
+                            "description": (
+                                "Numeric result offset for offset-based pagination. "
+                                "Use for scan_id queries, and use either offset or "
+                                "cursor, not both."
+                            ),
                             "minimum": 0,
                             "maximum": 10000,
                         },
