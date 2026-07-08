@@ -28,6 +28,30 @@ def test_list_findings_does_not_default_state_when_scan_id_is_present() -> None:
     client.get.assert_called_once_with("/scans/scan-1/findings", params={"limit": 25})
 
 
+def test_list_findings_passes_cursor_to_scan_findings_api() -> None:
+    client = MagicMock()
+    client.get.return_value = {"items": []}
+
+    findings.list_findings(client, scan_id="scan-1", limit=200, cursor="next-page")
+
+    client.get.assert_called_once_with(
+        "/scans/scan-1/findings",
+        params={"limit": 200, "cursor": "next-page"},
+    )
+
+
+def test_list_findings_passes_offset_to_api() -> None:
+    client = MagicMock()
+    client.get.return_value = {"items": []}
+
+    findings.list_findings(client, offset=200)
+
+    client.get.assert_called_once_with(
+        "/findings",
+        params={"limit": 25, "offset": 200, "state": "untriaged"},
+    )
+
+
 def test_list_findings_passes_filters_through_to_api() -> None:
     client = MagicMock()
     client.get.return_value = {"items": []}

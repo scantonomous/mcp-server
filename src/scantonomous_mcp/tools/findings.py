@@ -15,6 +15,8 @@ def list_findings(
     scan_id: str | None = None,
     asset_id: str | None = None,
     limit: int = 25,
+    cursor: str | None = None,
+    offset: int | None = None,
 ) -> dict[str, Any]:
     """Search and filter security findings.
 
@@ -28,6 +30,10 @@ def list_findings(
         the asset to its ``source_repository`` and queries OpenSearch
         directly. Ignored if ``scan_id`` is provided.
     :param limit: Maximum number of results (default 25).
+    :param cursor: Opaque pagination cursor returned as ``next_cursor`` by a
+        previous response.
+    :param offset: Numeric pagination offset for endpoints and filter
+        combinations that use offset-based pagination.
     :returns: List of findings with summary info.
     """
     source_repository: str | None = None
@@ -37,6 +43,10 @@ def list_findings(
             return {"items": [], "total": 0, "message": f"Asset {asset_id} not found"}
 
     params: dict[str, Any] = {"limit": limit}
+    if cursor:
+        params["cursor"] = cursor
+    if offset is not None:
+        params["offset"] = offset
     if severity:
         params["severity"] = severity
     if state:

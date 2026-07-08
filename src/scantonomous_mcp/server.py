@@ -394,8 +394,21 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Maximum number of results (default 25).",
+                            "description": "Maximum number of results (default 25, API maximum 200).",
                             "default": 25,
+                            "minimum": 1,
+                            "maximum": 200,
+                        },
+                        "cursor": {
+                            "type": "string",
+                            "description": "Opaque pagination cursor from the previous response's next_cursor field.",
+                            "maxLength": 1024,
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Numeric result offset for offset-based pagination.",
+                            "minimum": 0,
+                            "maximum": 10000,
                         },
                     },
                 },
@@ -638,6 +651,8 @@ async def _dispatch_tool(api: ScantonomousClient, name: str, args: dict) -> dict
                 scan_id=args.get("scan_id"),
                 asset_id=args.get("asset_id"),
                 limit=args.get("limit", 25),
+                cursor=args.get("cursor"),
+                offset=args.get("offset"),
             )
         case "get_finding":
             return findings.get_finding(api, finding_id=args["finding_id"])

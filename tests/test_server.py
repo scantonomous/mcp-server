@@ -124,6 +124,10 @@ def test_create_server_registers_expected_tools_and_populates_cache() -> None:
     assert (
         tools_by_name["triage_finding"].inputSchema["properties"]["finding_ids"]["maxItems"] == 25
     )
+    list_findings_schema = tools_by_name["list_findings"].inputSchema["properties"]
+    assert list_findings_schema["limit"]["maximum"] == 200
+    assert list_findings_schema["cursor"]["description"].startswith("Opaque pagination cursor")
+    assert list_findings_schema["offset"]["minimum"] == 0
 
 
 def test_create_server_registers_dast_tools() -> None:
@@ -351,6 +355,8 @@ def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch
                 "scan_id": None,
                 "asset_id": None,
                 "limit": 25,
+                "cursor": None,
+                "offset": None,
             },
         ),
         (

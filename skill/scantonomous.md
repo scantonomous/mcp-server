@@ -66,6 +66,7 @@ Always document the compensating controls in the `reason` field.
 - Use `list_assets` first to find the correct asset_id for the repository you're working on
 - After `create_scan`, poll `get_scan` until status is `completed` before fetching findings
 - Use `list_findings` with `scan_id` to see findings from a specific scan
+- If `list_findings` returns `next_cursor`, call it again with `cursor=next_cursor` until the cursor is absent or null
 - The `get_finding` response includes enough context (file path, line numbers, code snippet) to locate and fix the issue
 
 ## Web application (DAST) scanning
