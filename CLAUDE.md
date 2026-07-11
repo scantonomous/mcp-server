@@ -7,6 +7,16 @@
 - Output only diffs, code, or bullet points.
 - No conversational filler.
 
+## Architectural Invariants (Mandatory)
+
+Before designing, implementing, or reviewing any change, read
+`../documentation/architectural-invariants.md` and follow its invariants and tenets
+without fail. Every design, spec, and plan must include a short Architectural Invariants
+section that confirms alignment; any proposed exception must identify its owner,
+rationale, risk, scope, and expiration or removal trigger before implementation. During
+code and design/spec/plan reviews, verify these constraints and report violations as
+actionable findings; never approve or implement a silent exception.
+
 ## Credential & Secret Handling
 
 **NEVER output secrets, passwords, tokens, or credentials in tool results.** All tool
