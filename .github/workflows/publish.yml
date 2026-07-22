@@ -13,7 +13,7 @@ jobs:
     if: >-
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'release/v')
-    runs-on: [self-hosted, scntnms-ephemeral]
+    runs-on: [self-hosted, scntnms-ephemeral-arm64]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
