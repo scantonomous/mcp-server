@@ -8,11 +8,103 @@ Actions workflow, triggered automatically when a release PR merges to main.
 """
 
 import glob
+import json
 import os
 import re
 import shutil
+import tempfile
+from collections.abc import Mapping
+from typing import Any
 
-from invoke import Context, task
+from invoke import Context, Exit, task
+
+#: The tracked baseline. Never rewritten by the build -- see
+#: :func:`_check_secrets_baseline_is_current`.
+SECRETS_BASELINE = ".secrets.baseline"
+
+
+def _baseline_entry_keys(baseline: Mapping[str, Any]) -> set[tuple[str, str, str]]:
+    """Return ``(filename, type, hashed_secret)`` for every entry in *baseline*.
+
+    Deliberately excludes ``line_number``: a finding that merely moved is the
+    same finding, and gating on line numbers would fail the build for unrelated
+    edits above it.
+    """
+    keys: set[tuple[str, str, str]] = set()
+    for filename, findings in baseline.get("results", {}).items():
+        # detect-secrets excludes the baseline by FILENAME, so scanning against a
+        # copy under another path makes it scan the tracked baseline and report
+        # every `hashed_secret` in it as a Hex High Entropy String. The real
+        # baseline never contains itself, so dropping it here is what restores
+        # the comparison rather than papering over a finding.
+        if os.path.normpath(filename) == os.path.normpath(SECRETS_BASELINE):
+            continue
+        for finding in findings:
+            keys.add(
+                (
+                    str(finding.get("filename", filename)),
+                    str(finding.get("type", "unknown")),
+                    str(finding.get("hashed_secret", "")),
+                )
+            )
+    return keys
+
+
+def _check_secrets_baseline_is_current(ctx: Context) -> None:
+    """Scan for secrets WITHOUT rewriting the tracked baseline.
+
+    ``detect-secrets scan --baseline F`` updates ``F`` in place, so running it
+    from the build left ``.secrets.baseline`` modified on every single
+    invocation -- usually only a ``generated_at`` bump, with nothing found. The
+    cost was not the diff; it was what the diff taught. A file that is *always*
+    dirty gets reflexively discarded, and the one time the rewrite carries a
+    real new finding it is discarded exactly the same way, unread.
+
+    So: scan against a throwaway copy and compare entries, never touching the
+    tracked file. A difference fails the build rather than being silently
+    absorbed -- adding a finding to the allowlist should be a deliberate,
+    reviewable commit.
+
+    Compared on ``(filename, type, hashed_secret)``; ``line_number`` and
+    ``generated_at`` are ignored so unrelated edits do not trip it.
+
+    **Scans git-TRACKED files only**, which is detect-secrets' default in a
+    repo. An untracked file holding a secret is invisible here -- consistent
+    with CI, which only ever sees tracked content.
+
+    :param ctx: Invoke context.
+    :raises Exit: If the scan finds entries the baseline does not carry.
+    """
+    with open(SECRETS_BASELINE, encoding="utf-8") as baseline_file:
+        committed = json.load(baseline_file)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        probe = os.path.join(tmpdir, "baseline.json")
+        shutil.copyfile(SECRETS_BASELINE, probe)
+        # Writes the updated baseline to `probe`; stdout is the same content and
+        # is discarded. `probe` is what we read back.
+        ctx.run(f"detect-secrets scan --baseline {probe} > /dev/null", pty=True)
+        with open(probe, encoding="utf-8") as probe_file:
+            scanned = json.load(probe_file)
+
+    added = _baseline_entry_keys(scanned) - _baseline_entry_keys(committed)
+    removed = _baseline_entry_keys(committed) - _baseline_entry_keys(scanned)
+
+    if not added and not removed:
+        return
+
+    print(f"{SECRETS_BASELINE} is out of date.")
+    for filename, secret_type, _hashed in sorted(added):
+        print(f"  NEW      {filename} ({secret_type})")
+    for filename, secret_type, _hashed in sorted(removed):
+        print(f"  GONE     {filename} ({secret_type})")
+    print(
+        "\nReview each NEW entry as a real secret first. If it is a false positive"
+        f"\n(a digest, a fixture, generated test data), refresh the baseline with:"
+        f"\n    uv run detect-secrets scan --baseline {SECRETS_BASELINE}"
+        f"\nand commit {SECRETS_BASELINE} as part of the change that introduced it."
+    )
+    raise Exit(code=1)
 
 
 @task
@@ -43,8 +135,13 @@ def clean(ctx: Context) -> None:
 @task
 def lint(ctx: Context) -> None:
     """Run code quality checks: ruff lint, ruff format, pyright."""
-    ctx.run("ruff check src/", pty=True)
-    ctx.run("ruff format --check src/", pty=True)
+    # tasks.py is in scope: it carries the secrets-baseline gate, so a lint
+    # regression there would silently degrade a security check. Pyright is
+    # deliberately NOT extended to it -- invoke does not re-export `task` or
+    # `Context` from its package root, so every task module trips
+    # reportPrivateImportUsage on a third-party typing quirk.
+    ctx.run("ruff check src/ tasks.py", pty=True)
+    ctx.run("ruff format --check src/ tasks.py", pty=True)
     ctx.run("pyright src/", pty=True)
 
 
@@ -74,15 +171,14 @@ def security(ctx: Context) -> None:
     # which avoids network dependencies and the brittle pip bootstrap step. This flag
     # requires hashed input (which uv export provides).
     ctx.run(
-        "uv export --no-dev --no-emit-project --format requirements-txt"
-        " -o .runtime-deps.txt",
+        "uv export --no-dev --no-emit-project --format requirements-txt -o .runtime-deps.txt",
         pty=True,
     )
     ctx.run(
         "pip-audit --desc --require-hashes --disable-pip -r .runtime-deps.txt",
         pty=True,
     )
-    ctx.run("detect-secrets scan --baseline .secrets.baseline", pty=True)
+    _check_secrets_baseline_is_current(ctx)
     ctx.run("detect-secrets audit --report .secrets.baseline", pty=True)
 
 
