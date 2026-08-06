@@ -37,12 +37,14 @@ build = [
 #   - starlette 1.3.1 — CVE-2026-54282/54283 (URL-host confusion + form-limit DoS)
 #   - python-multipart 0.0.31 — CVE-2026-53538 (separator differential) +
 #     CVE-2026-53540 (negative Content-Length unbounded read)
-#   - cryptography 49.0.0 — GHSA-537c-gmf6-5ccf (statically-linked OpenSSL)
+#   - cryptography 50.0.0 — GHSA-537c-gmf6-5ccf (statically-linked OpenSSL) and
+#     GHSA-g6cj-pr64-35w5 / CVE-2026-69247 (Bleichenbacher oracle in PKCS#7
+#     EnvelopedData decryption, 44.0.0..<50.0.0; fix in 50.0.0). SCA-460.
 #   - pydantic-settings 2.14.2 — GHSA-4xgf-cpjx-pc3j (symlink dir-traversal in NestedSecretsSettingsSource)
 constraint-dependencies = [
     "starlette==1.3.1",
     "python-multipart==0.0.31",
-    "cryptography==49.0.0",
+    "cryptography==50.0.0",
     "pydantic-settings==2.14.2",
 ]
 
