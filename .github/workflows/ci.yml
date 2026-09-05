@@ -8,7 +8,13 @@ permissions:
 
 jobs:
   lint-and-test:
-    runs-on: [self-hosted, scntnms-ephemeral-arm64]
+    # Small arm64 pool -- m7g.large, 2 vCPU / 8 GiB (SCA-477). Pure Python: uv
+    # sync, `inv lint`, `inv security`, `inv test`. No container build, no
+    # bundler, no npm, so 8 GiB cannot plausibly bind.
+    #
+    # If this ever grows a container build or a Lambda bundling step, move it
+    # back to `scntnms-ephemeral-arm64` in the same commit.
+    runs-on: [self-hosted, scntnms-ephemeral-arm64-small]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
