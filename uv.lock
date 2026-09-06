@@ -1090,7 +1090,7 @@ wheels = [
 
 [[package]]
 name = "scantonomous-mcp"
-version = "0.3.8"
+version = "0.3.9"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
