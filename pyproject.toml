@@ -22,30 +22,35 @@ scantonomous-mcp = "scantonomous_mcp.cli:main"
 build = [
     "invoke==3.0.3",
     "pytest==9.1.1",
-    "ruff==0.15.20",
+    "ruff==0.16.5",
     "pyright==1.1.411",
     "bandit==1.9.4",
     "pip-audit==2.10.1",
     "detect-secrets==1.5.0",
     "pinstack==0.2.0",
-    "hatchling==1.31.0",
+    "hatchling==1.32.0",
 ]
 
 [tool.uv]
 # SCA-422: bump transitive deps past freshly-published CVEs (constraint-only;
-# they stay transitive):
-#   - starlette 1.3.1 — CVE-2026-54282/54283 (URL-host confusion + form-limit DoS)
-#   - python-multipart 0.0.31 — CVE-2026-53538 (separator differential) +
-#     CVE-2026-53540 (negative Content-Length unbounded read)
-#   - cryptography 50.0.0 — GHSA-537c-gmf6-5ccf (statically-linked OpenSSL) and
-#     GHSA-g6cj-pr64-35w5 / CVE-2026-69247 (Bleichenbacher oracle in PKCS#7
-#     EnvelopedData decryption, 44.0.0..<50.0.0; fix in 50.0.0). SCA-460.
-#   - pydantic-settings 2.14.2 — GHSA-4xgf-cpjx-pc3j (symlink dir-traversal in NestedSecretsSettingsSource)
+# they stay transitive). Each version below is at or above the floor that
+# clears the advisory named beside it, and each has a passing dependency
+# review; raised 2026-09-19 (SCA-418) to versions already reviewed for the
+# fleet, so the floors are unchanged and only the pinned point moves.
+#   - starlette — floor 1.3.1 for CVE-2026-54282/54283 (URL-host confusion +
+#     form-limit DoS)
+#   - python-multipart — floor 0.0.31 for CVE-2026-53538 (separator
+#     differential) + CVE-2026-53540 (negative Content-Length unbounded read)
+#   - cryptography — floor 50.0.0 for GHSA-537c-gmf6-5ccf (statically-linked
+#     OpenSSL) and GHSA-g6cj-pr64-35w5 / CVE-2026-69247 (Bleichenbacher oracle
+#     in PKCS#7 EnvelopedData decryption, 44.0.0..<50.0.0). SCA-460.
+#   - pydantic-settings — floor 2.14.2 for GHSA-4xgf-cpjx-pc3j (symlink
+#     dir-traversal in NestedSecretsSettingsSource)
 constraint-dependencies = [
-    "starlette==1.3.1",
-    "python-multipart==0.0.31",
-    "cryptography==50.0.0",
-    "pydantic-settings==2.14.2",
+    "starlette==1.6.0",
+    "python-multipart==0.0.32",
+    "cryptography==50.0.1",
+    "pydantic-settings==2.15.0",
 ]
 
 [tool.hatch.build.targets.wheel]
