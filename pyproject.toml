@@ -13,6 +13,23 @@ dependencies = [
     "httpx==0.28.1",
     "keyring==25.7.0",
     "click==8.4.2",
+    # Transitives pinned forward past specific CVEs. These live HERE, not in
+    # [tool.uv] constraint-dependencies, because the documented install is
+    # `pip install git+https://github.com/scantonomous/mcp-server.git`, which
+    # resolves from this metadata and never reads [tool.uv]. Verified before
+    # moving them: `uv pip install --dry-run ./mcp-server 'anyio==4.13.0'`
+    # resolved happily, as did starlette 1.3.1, cryptography 50.0.0 and
+    # python-multipart 0.0.31 -- so a uv-only constraint had never protected
+    # anyone installing the package.
+    #
+    # Exact pins per this repo's pinning policy (pinstack rejects `>=`). The
+    # advisory FLOOR is named beside each one so raising the pin never
+    # silently rewrites what the fix required.
+    "anyio==4.14.2",             # floor 4.14.2 — CVE-2026-63374, CVE-2026-64847
+    "starlette==1.6.0",          # floor 1.3.1  — CVE-2026-54282, CVE-2026-54283
+    "python-multipart==0.0.32",  # floor 0.0.31 — CVE-2026-53538, CVE-2026-53540
+    "cryptography==50.0.1",      # floor 50.0.0 — GHSA-537c-gmf6-5ccf, CVE-2026-69247
+    "pydantic-settings==2.15.0", # floor 2.14.2 — GHSA-4xgf-cpjx-pc3j
 ]
 
 [project.scripts]
@@ -31,28 +48,9 @@ build = [
     "hatchling==1.32.0",
 ]
 
-[tool.uv]
-# SCA-422: bump transitive deps past freshly-published CVEs (constraint-only;
-# they stay transitive). Each version below is at or above the floor that
-# clears the advisory named beside it, and each has a passing dependency
-# review; raised 2026-09-19 (SCA-418) to versions already reviewed for the
-# fleet, so the floors are unchanged and only the pinned point moves.
-#   - starlette — floor 1.3.1 for CVE-2026-54282/54283 (URL-host confusion +
-#     form-limit DoS)
-#   - python-multipart — floor 0.0.31 for CVE-2026-53538 (separator
-#     differential) + CVE-2026-53540 (negative Content-Length unbounded read)
-#   - cryptography — floor 50.0.0 for GHSA-537c-gmf6-5ccf (statically-linked
-#     OpenSSL) and GHSA-g6cj-pr64-35w5 / CVE-2026-69247 (Bleichenbacher oracle
-#     in PKCS#7 EnvelopedData decryption, 44.0.0..<50.0.0). SCA-460.
-#   - pydantic-settings — floor 2.14.2 for GHSA-4xgf-cpjx-pc3j (symlink
-#     dir-traversal in NestedSecretsSettingsSource)
-constraint-dependencies = [
-    "starlette==1.6.0",
-    "python-multipart==0.0.32",
-    "cryptography==50.0.1",
-    "pydantic-settings==2.15.0",
-]
-
+# NOTE: [tool.uv] constraint-dependencies used to carry four CVE pins. They
+# moved into [project].dependencies so the shipped metadata enforces them;
+# a uv-only constraint never reached anyone installing the package.
 [tool.hatch.build.targets.wheel]
 packages = ["src/scantonomous_mcp"]
 
