@@ -1082,7 +1082,7 @@ wheels = [
 
 [[package]]
 name = "scantonomous-mcp"
-version = "0.3.9"
+version = "0.3.10"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
