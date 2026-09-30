@@ -30,6 +30,11 @@ dependencies = [
     "python-multipart==0.0.31",  # floor 0.0.31 - CVE-2026-53538, CVE-2026-53540
     "cryptography==50.0.0",      # floor 50.0.0 - GHSA-537c-gmf6-5ccf, CVE-2026-69247
     "pydantic-settings==2.14.2", # floor 2.14.2 - GHSA-4xgf-cpjx-pc3j
+    "pyjwt==2.15.0",             # floor 2.15.0 - CVE-2026-101917, CVE-2026-101918,
+                                 #   CVE-2026-102265, CVE-2026-102266, CVE-2026-102267,
+                                 #   CVE-2026-102268, CVE-2026-102269, CVE-2026-102270,
+                                 #   CVE-2026-102271, CVE-2026-102272, CVE-2026-102273,
+                                 #   CVE-2026-102274
 ]
 
 [project.scripts]
