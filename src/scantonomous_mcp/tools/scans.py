@@ -25,16 +25,24 @@ def list_assets(
 ) -> dict[str, Any]:
     """List connected assets — code repositories and web applications.
 
-    :param query: Optional search query to filter assets by name.
-    :param limit: Maximum number of results (default 25).
+    The API currently ignores ``query`` and ``limit`` and returns every asset
+    in the account, so both are applied here.
+
+    :param query: Optional case-insensitive substring matched against a
+        repository's ``repo_path`` (its ``name`` when it has no path) or a web
+        app's origin.
+    :param limit: Maximum number of results (default 25), applied after the
+        ``kind`` and ``query`` filters.
     :param kind: ``"all"`` (default), ``"repo"`` (code repositories only), or
         ``"web"`` (web_endpoint assets only).
     :returns: ``{"assets": [...]}``. Every asset carries ``asset_id`` and
-        ``asset_type``; code repositories carry ``repo_path``; ``web_endpoint``
-        assets additionally carry ``origin`` (``scheme://fqdn:port``),
-        ``verification_status``, and ``analysis_state`` (passed through verbatim —
-        wire states include ``legacy``/``pending``/``pending_enqueue``/
-        ``analyzed``/``failed``).
+        ``asset_type``; code repositories carry ``repo_path`` and ``provider``
+        (``github``, ``gitlab`` or ``bitbucket``; two providers can host the
+        same ``repo_path``), plus ``instance_url`` for self-hosted GitLab;
+        ``web_endpoint`` assets additionally carry
+        ``origin`` (``scheme://fqdn:port``), ``verification_status``, and
+        ``analysis_state`` (passed through verbatim — wire states include
+        ``legacy``/``pending``/``pending_enqueue``/``analyzed``/``failed``).
     """
     account_id = client.get_account_id()
     params: dict[str, Any] = {"limit": limit}
@@ -42,9 +50,12 @@ def list_assets(
         params["query"] = query
     data = client.get(f"/account/{account_id}/assets", params=params)
     items = data.get("items", [])
+    needle = query.strip().casefold() if query else ""
 
     assets: list[dict[str, Any]] = []
     for a in items:
+        if len(assets) >= limit:
+            break
         asset_type = a.get("asset_type", "code_repository")
         if kind == "repo" and asset_type != "code_repository":
             continue
@@ -59,8 +70,32 @@ def list_assets(
             entry["origin"] = f"{a.get('scheme', '')}://{a.get('fqdn', '')}:{a.get('port', '')}"
             entry["verification_status"] = a.get("effective_verification", "unverified")
             entry["analysis_state"] = a.get("analysis_state", "")
+            searchable = (entry["origin"],)
+        else:
+            entry["provider"] = _repository_provider(a)
+            if a.get("instance_url"):
+                entry["instance_url"] = a["instance_url"]
+            searchable = (entry["repo_path"],)
+        if needle and not any(needle in s.casefold() for s in searchable):
+            continue
         assets.append(entry)
     return {"assets": assets}
+
+
+def _repository_provider(asset: dict[str, Any]) -> str:
+    """Return a code repository's SCM provider.
+
+    Falls back to the ``external_ref`` prefix for assets stored without a
+    ``provider`` attribute.
+
+    :param asset: Asset as returned by the API.
+    :returns: The provider, or ``""`` when neither field names one.
+    """
+    provider = asset.get("provider") or ""
+    if provider:
+        return provider
+    prefix, separator, _rest = (asset.get("external_ref") or "").partition(":")
+    return prefix if separator else ""
 
 
 def create_scan(
