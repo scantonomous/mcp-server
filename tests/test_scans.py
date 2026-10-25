@@ -16,24 +16,121 @@ def test_list_assets_maps_repo_path_and_asset_type() -> None:
     client.get_account_id.return_value = "acct-123"
     client.get.return_value = {
         "items": [
-            {"asset_id": "asset-1", "asset_type": "code_repository",
+            {"asset_id": "asset-1", "asset_type": "code_repository", "provider": "github",
              "repo_path": "scantonomous/services"},
-            {"asset_id": "asset-2", "asset_type": "code_repository", "name": "fallback-name"},
+            {"asset_id": "asset-2", "asset_type": "code_repository", "provider": "github",
+             "name": "fallback-name"},
         ]
     }
 
-    result = scans.list_assets(client, query="services", limit=10)
+    result = scans.list_assets(client, limit=10)
 
-    client.get.assert_called_once_with(
-        "/account/acct-123/assets", params={"limit": 10, "query": "services"}
-    )
+    client.get.assert_called_once_with("/account/acct-123/assets", params={"limit": 10})
     assert result == {
         "assets": [
-            {"asset_id": "asset-1", "asset_type": "code_repository",
+            {"asset_id": "asset-1", "asset_type": "code_repository", "provider": "github",
              "repo_path": "scantonomous/services"},
-            {"asset_id": "asset-2", "asset_type": "code_repository", "repo_path": "fallback-name"},
+            {"asset_id": "asset-2", "asset_type": "code_repository", "provider": "github",
+             "repo_path": "fallback-name"},
         ]
     }
+
+
+def test_list_assets_reports_provider_so_same_path_repos_are_distinguishable() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "gh-1", "asset_type": "code_repository", "provider": "github",
+             "repo_path": "acme/app", "external_ref": "github:acme/app"},
+            {"asset_id": "bb-1", "asset_type": "code_repository", "provider": "bitbucket",
+             "repo_path": "acme/app",
+             "external_ref": "bitbucket:b29b26c2-1a9f-4ea0-8e44-73fa0aa5f84c"},
+        ]
+    }
+
+    result = scans.list_assets(client)
+
+    assert [(a["asset_id"], a["provider"]) for a in result["assets"]] == [
+        ("gh-1", "github"),
+        ("bb-1", "bitbucket"),
+    ]
+
+
+def test_list_assets_derives_missing_provider_from_external_ref() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "legacy-1", "asset_type": "code_repository", "provider": "",
+             "repo_path": "acme/old", "external_ref": "gitlab:acme/old"},
+            {"asset_id": "legacy-2", "asset_type": "code_repository", "repo_path": "acme/odd"},
+        ]
+    }
+
+    result = scans.list_assets(client)
+
+    assert [a["provider"] for a in result["assets"]] == ["gitlab", ""]
+
+
+def test_list_assets_omits_provider_for_web_endpoints() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "provider": "",
+             "external_ref": "web:https://shop.example.com:443", "scheme": "https",
+             "fqdn": "shop.example.com", "port": 443},
+        ]
+    }
+
+    result = scans.list_assets(client)
+
+    assert "provider" not in result["assets"][0]
+
+
+def test_list_assets_filters_by_query_because_the_api_returns_every_asset() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "bb-1", "asset_type": "code_repository", "provider": "bitbucket",
+             "repo_path": "scntnms-demo/Space-Kitten-Mittens"},
+            {"asset_id": "gh-1", "asset_type": "code_repository", "provider": "github",
+             "repo_path": "acme/app"},
+            {"asset_id": "named-1", "asset_type": "code_repository", "provider": "github",
+             "name": "kitten-tools"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "kittens.example.com", "port": 443},
+            {"asset_id": "web-2", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "other.example.com", "port": 443},
+        ]
+    }
+
+    result = scans.list_assets(client, query="KITTEN")
+
+    client.get.assert_called_once_with(
+        "/account/acct-123/assets", params={"limit": 25, "query": "KITTEN"}
+    )
+    assert [a["asset_id"] for a in result["assets"]] == ["bb-1", "named-1", "web-1"]
+
+
+def test_list_assets_enforces_limit_after_filtering() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "scheme": "https",
+             "fqdn": "a.example.com", "port": 443},
+            {"asset_id": "repo-1", "asset_type": "code_repository", "repo_path": "x/a"},
+            {"asset_id": "repo-2", "asset_type": "code_repository", "repo_path": "x/b"},
+            {"asset_id": "repo-3", "asset_type": "code_repository", "repo_path": "x/c"},
+        ]
+    }
+
+    result = scans.list_assets(client, limit=2, kind="repo")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["repo-1", "repo-2"]
 
 
 def test_list_assets_shapes_web_endpoint_fields() -> None:
@@ -107,6 +204,59 @@ def test_list_assets_kind_all_returns_both() -> None:
     result = scans.list_assets(client, kind="all")
 
     assert [a["asset_id"] for a in result["assets"]] == ["repo-1", "web-1"]
+
+
+def test_list_assets_passes_instance_url_for_self_hosted_repositories() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "gl-com", "asset_type": "code_repository", "provider": "gitlab",
+             "repo_path": "acme/app"},
+            {"asset_id": "gl-self", "asset_type": "code_repository", "provider": "gitlab",
+             "repo_path": "acme/app", "instance_url": "https://git.acme.example"},
+        ]
+    }
+
+    result = scans.list_assets(client)
+
+    assert "instance_url" not in result["assets"][0]
+    assert result["assets"][1]["instance_url"] == "https://git.acme.example"
+
+
+def test_list_assets_ignores_surrounding_whitespace_in_query() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "bb-1", "asset_type": "code_repository", "provider": "bitbucket",
+             "repo_path": "scntnms-demo/space-kitten-mittens"},
+        ]
+    }
+
+    result = scans.list_assets(client, query="  space-kitten-mittens\n")
+
+    assert [a["asset_id"] for a in result["assets"]] == ["bb-1"]
+
+
+def test_list_assets_falls_back_to_name_when_api_sends_empty_repo_path() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "legacy-1", "asset_type": "code_repository", "provider": "github",
+             "repo_path": "", "name": "acme/old", "external_ref": "github:acme/old"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "repo_path": "",
+             "name": "Old shop", "scheme": "https", "fqdn": "old.example.com", "port": 443},
+        ]
+    }
+
+    result = scans.list_assets(client, query="old")
+
+    assert [(a["asset_id"], a["repo_path"]) for a in result["assets"]] == [
+        ("legacy-1", "acme/old"),
+        ("web-1", ""),
+    ]
 
 
 def test_create_scan_sets_mcp_trigger_type() -> None:

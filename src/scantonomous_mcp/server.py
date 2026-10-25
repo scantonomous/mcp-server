@@ -135,7 +135,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                 description=(
                     "List connected assets — code repositories and web applications. "
                     "Each asset has asset_id and asset_type ('code_repository' or "
-                    "'web_endpoint'). Web apps also include origin (scheme://fqdn:port), "
+                    "'web_endpoint'). Repositories also include repo_path and provider "
+                    "('github', 'gitlab' or 'bitbucket'), plus instance_url for self-hosted "
+                    "GitLab; match these to the local git remote, since the same path can "
+                    "exist on more than one host. Web apps also "
+                    "include origin (scheme://fqdn:port), "
                     "verification_status, and analysis_state. Use kind='web' to list only "
                     "web apps. Use the asset_id with create_scan (repos) or create_dast_scan "
                     "(web apps)."
@@ -145,12 +149,15 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Optional search query to filter assets by name.",
+                            "description": (
+                                "Optional case-insensitive substring of a repo_path or web origin."
+                            ),
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Maximum number of results (default 25).",
                             "default": 25,
+                            "minimum": 1,
                         },
                         "kind": {
                             "type": "string",
