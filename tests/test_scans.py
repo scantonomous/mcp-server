@@ -239,6 +239,26 @@ def test_list_assets_ignores_surrounding_whitespace_in_query() -> None:
     assert [a["asset_id"] for a in result["assets"]] == ["bb-1"]
 
 
+def test_list_assets_falls_back_to_name_when_api_sends_empty_repo_path() -> None:
+    client = MagicMock()
+    client.get_account_id.return_value = "acct-123"
+    client.get.return_value = {
+        "items": [
+            {"asset_id": "legacy-1", "asset_type": "code_repository", "provider": "github",
+             "repo_path": "", "name": "acme/old", "external_ref": "github:acme/old"},
+            {"asset_id": "web-1", "asset_type": "web_endpoint", "repo_path": "",
+             "name": "Old shop", "scheme": "https", "fqdn": "old.example.com", "port": 443},
+        ]
+    }
+
+    result = scans.list_assets(client, query="old")
+
+    assert [(a["asset_id"], a["repo_path"]) for a in result["assets"]] == [
+        ("legacy-1", "acme/old"),
+        ("web-1", ""),
+    ]
+
+
 def test_create_scan_sets_mcp_trigger_type() -> None:
     client = MagicMock()
     client.post.return_value = {"scan_id": "scan-1"}

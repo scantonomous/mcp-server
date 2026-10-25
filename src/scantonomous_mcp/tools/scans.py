@@ -72,6 +72,8 @@ def list_assets(
             entry["analysis_state"] = a.get("analysis_state", "")
             searchable = (entry["origin"],)
         else:
+            # The API serializes a missing path as "", so fall back on emptiness.
+            entry["repo_path"] = a.get("repo_path") or a.get("name") or ""
             entry["provider"] = _repository_provider(a)
             if a.get("instance_url"):
                 entry["instance_url"] = a["instance_url"]
