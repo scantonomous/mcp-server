@@ -628,11 +628,11 @@ wheels = [
 
 [[package]]
 name = "pinstack"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3d/75/136f2a0374dbcb5c0a471fd84a803ebf1b636deb10c02c95ba30d762fd37/pinstack-0.3.0.tar.gz", hash = "sha256:f86ab702bc2b11c5667162d74401f05636260a28cb64cc703b3cdc5f579811d1", size = 146284, upload-time = "2026-11-03T04:47:14.227Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/fa/88721a5fdf2709038bf3d417c1c7cd473eaef98f02305a1dd3cf8e4f675c/pinstack-0.4.0.tar.gz", hash = "sha256:021fcc71c375c47793161a83bfc993e10d30f151a5e2f652c46b0ec42b22c1b8", size = 148747, upload-time = "2026-11-03T17:49:11.651Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/b5/d81e0b953e37e292db7ec00313991ca4ed7b6752705f6c7189128a2216a0/pinstack-0.3.0-py3-none-any.whl", hash = "sha256:589d2e539c83d9912b80cac9645ef4c0d1ce33f1681f965dcf63d6e8116d72db", size = 95270, upload-time = "2026-11-03T04:47:12.921Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/1c/cd8b4a3429fed6cc0110615e7fb95383ffd23058597e95a343d77023c813/pinstack-0.4.0-py3-none-any.whl", hash = "sha256:95773e2df037fea0cbea87a490940dd1f305ce3c6ce9cc9e098505dbcd95233c", size = 96322, upload-time = "2026-11-03T17:49:10.53Z" },
 ]
 
 [[package]]
@@ -1130,7 +1130,7 @@ build = [
     { name = "detect-secrets", specifier = "==1.5.0" },
     { name = "hatchling", specifier = "==1.31.0" },
     { name = "invoke", specifier = "==3.0.3" },
-    { name = "pinstack", specifier = "==0.3.0" },
+    { name = "pinstack", specifier = "==0.4.0" },
     { name = "pip-audit", specifier = "==2.10.1" },
     { name = "pyright", specifier = "==1.1.411" },
     { name = "pytest", specifier = "==9.1.1" },
