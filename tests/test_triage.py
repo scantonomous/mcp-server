@@ -165,3 +165,72 @@ def test_get_findings_summary_with_scan_id() -> None:
 
     client.get.assert_called_once_with("/findings/stats", params={"scan_id": "scan-1"})
     assert result == {"total": 1}
+
+
+def test_set_finding_label_patches_label_with_mcp_source() -> None:
+    client = MagicMock()
+    client.patch.return_value = {"finding_id": "finding-1", "label": "exploitable"}
+
+    result = triage.set_finding_label(
+        client, finding_id="finding-1", label="Exploitable", ai_model="Claude Opus 4.7"
+    )
+
+    client.patch.assert_called_once_with(
+        "/findings/finding-1/label",
+        body={"label": "Exploitable", "source": "mcp", "ai_model": "Claude Opus 4.7"},
+    )
+    assert result == {"finding_id": "finding-1", "label": "exploitable"}
+
+
+def test_set_finding_label_omits_ai_model_when_not_given() -> None:
+    client = MagicMock()
+    client.patch.return_value = {}
+
+    triage.set_finding_label(client, finding_id="finding-1", label="Hardening")
+
+    client.patch.assert_called_once_with(
+        "/findings/finding-1/label",
+        body={"label": "Hardening", "source": "mcp"},
+    )
+
+
+@pytest.mark.parametrize("label", ["exploitable", "Needs review", "needs_review", ""])
+def test_set_finding_label_rejects_other_labels(label: str) -> None:
+    client = MagicMock()
+
+    with pytest.raises(ValueError, match="label must be one of Exploitable, Hardening"):
+        triage.set_finding_label(client, finding_id="finding-1", label=label)
+
+    client.patch.assert_not_called()
+
+
+def test_set_finding_label_requires_finding_id() -> None:
+    client = MagicMock()
+
+    with pytest.raises(ValueError, match="finding_id is required"):
+        triage.set_finding_label(client, finding_id="", label="Hardening")
+
+    client.patch.assert_not_called()
+
+
+def test_triage_finding_sends_not_production_state() -> None:
+    client = MagicMock()
+    client.patch.return_value = {"status": "ok"}
+
+    triage.triage_finding(
+        client,
+        state="not_production",
+        reason="Test fixture only",
+        ai_model="GPT-5.4",
+        finding_id="finding-1",
+    )
+
+    client.patch.assert_called_once_with(
+        "/findings/finding-1/state",
+        body={
+            "state": "not_production",
+            "reason": "Test fixture only",
+            "source": "mcp",
+            "ai_model": "GPT-5.4",
+        },
+    )

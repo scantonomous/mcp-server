@@ -140,7 +140,8 @@ scantonomous-mcp --stage dev logout
 | `list_findings` | Search/filter findings |
 | `get_finding` | Full finding details + evidence |
 | `get_remediation` | AI-generated fix suggestion |
-| `triage_finding` | Mark finding as fixed/FP/accepted/will_fix/duplicate |
+| `triage_finding` | Mark finding as fixed/FP/not_production/accepted/will_fix/duplicate |
+| `set_finding_label` | Label a finding Exploitable or Hardening (clears a Noise Reduction Needs review block) |
 | `get_findings_summary` | Severity and state statistics |
 
 ## CLI Reference
