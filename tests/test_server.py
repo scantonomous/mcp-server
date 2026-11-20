@@ -108,6 +108,7 @@ def test_create_server_registers_expected_tools_and_populates_cache() -> None:
         "get_finding",
         "get_remediation",
         "triage_finding",
+        "set_finding_label",
         "get_findings_summary",
     ]
     assert [tool.name for tool in tools] == expected_names
@@ -130,6 +131,52 @@ def test_create_server_registers_expected_tools_and_populates_cache() -> None:
     assert "either cursor or offset" in list_findings_schema["cursor"]["description"]
     assert list_findings_schema["offset"]["minimum"] == 0
     assert "scan_id queries" in list_findings_schema["offset"]["description"]
+
+
+def test_not_production_state_is_offered_for_filtering_and_triage() -> None:
+    """SCA-523: not_production is a triage state like false_positive."""
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    tools = {tool.name: tool for tool in asyncio.run(_list_tools(server_instance))}
+
+    list_states = tools["list_findings"].inputSchema["properties"]["state"]["enum"]
+    triage_states = tools["triage_finding"].inputSchema["properties"]["state"]["enum"]
+    assert "not_production" in list_states
+    assert "not_production" in triage_states
+    assert "not_production" in (server_instance.instructions or "")
+
+
+def test_set_finding_label_schema_and_description() -> None:
+    """SCA-523: the label tool takes only the two human labels, and its description
+    says it clears a Needs review block and must rest on reading the code."""
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    tools = {tool.name: tool for tool in asyncio.run(_list_tools(server_instance))}
+    tool = tools["set_finding_label"]
+
+    assert tool.inputSchema["required"] == ["finding_id", "label"]
+    assert tool.inputSchema["properties"]["label"]["enum"] == ["Exploitable", "Hardening"]
+    assert "ai_model" in tool.inputSchema["properties"]
+    description = tool.description or ""
+    assert "Needs review" in description
+    assert "reading the code" in description
+    assert "untrusted" in description
+    assert "set_finding_label" in (server_instance.instructions or "")
+
+
+def test_call_tool_rejects_label_outside_enum(monkeypatch) -> None:
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    set_label = MagicMock(return_value={})
+    monkeypatch.setattr(server.triage, "set_finding_label", set_label)
+
+    result = asyncio.run(
+        _call_tool(
+            server_instance,
+            "set_finding_label",
+            {"finding_id": "finding-1", "label": "Needs review"},
+        )
+    )
+
+    assert result.root.isError is True
+    set_label.assert_not_called()
 
 
 def test_create_server_registers_dast_tools() -> None:
@@ -391,6 +438,12 @@ def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch
                 "ecd": None,
                 "approval_reference": None,
             },
+        ),
+        (
+            "set_finding_label",
+            ("triage", "set_finding_label"),
+            {"finding_id": "finding-1", "label": "Hardening"},
+            {"finding_id": "finding-1", "label": "Hardening", "ai_model": None},
         ),
         (
             "get_findings_summary",

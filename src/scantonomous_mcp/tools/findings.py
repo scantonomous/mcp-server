@@ -21,8 +21,8 @@ def list_findings(
     """Search and filter security findings.
 
     :param severity: Filter by severity (critical, high, medium, low, info).
-    :param state: Filter by state (untriaged, fixed, false_positive, accepted_risk,
-        will_fix, duplicate, reopened). Defaults to ``untriaged`` to show
+    :param state: Filter by state (untriaged, fixed, false_positive, not_production,
+        accepted_risk, will_fix, duplicate, reopened). Defaults to ``untriaged`` to show
         unresolved findings first.
     :param query: Free-text search query.
     :param scan_id: Filter to findings from a specific scan.
