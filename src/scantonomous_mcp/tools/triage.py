@@ -1,4 +1,4 @@
-"""Triage tools: triage_finding, get_findings_summary."""
+"""Triage tools: triage_finding, set_finding_label, get_findings_summary."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ from typing import Any
 from ..client import ApiError, ScantonomousClient
 
 MAX_BATCH_SIZE = 25
+#: Labels a person or agent may set (SCA-523); the API takes them capitalized.
+FINDING_LABELS = ("Exploitable", "Hardening")
 
 
 def triage_finding(
@@ -23,8 +25,8 @@ def triage_finding(
 
     Supply either ``finding_id`` (single) or ``finding_ids`` (batch, up to 25).
 
-    :param state: New state: ``fixed``, ``false_positive``, ``accepted_risk``,
-        ``will_fix``, or ``duplicate``.
+    :param state: New state: ``fixed``, ``false_positive``, ``not_production``,
+        ``accepted_risk``, ``will_fix``, or ``duplicate``.
     :param reason: Explanation for the decision.
     :param ai_model: The AI model performing the triage (e.g. "Claude Opus 4.6").
     :param finding_id: A single finding ID to triage.
@@ -67,6 +69,34 @@ def triage_finding(
     succeeded = sum(1 for r in results if r["status"] == "success")
     failed = len(results) - succeeded
     return {"succeeded": succeeded, "failed": failed, "results": results}
+
+
+def set_finding_label(
+    client: ScantonomousClient,
+    finding_id: str,
+    label: str,
+    ai_model: str | None = None,
+) -> dict[str, Any]:
+    """Label a finding Exploitable or Hardening (SCA-523).
+
+    The label overrides the Noise Reduction label and clears a Needs review
+    block on the pull request.
+
+    :param finding_id: The finding to label.
+    :param label: ``Exploitable`` or ``Hardening``.
+    :param ai_model: The AI model setting the label (e.g. "Claude Opus 4.7").
+    :returns: The updated finding.
+    :raises ValueError: If ``finding_id`` is empty or ``label`` is not one of
+        :data:`FINDING_LABELS`.
+    """
+    if not finding_id:
+        raise ValueError("finding_id is required.")
+    if label not in FINDING_LABELS:
+        raise ValueError(f"label must be one of {', '.join(FINDING_LABELS)}.")
+    body: dict[str, Any] = {"label": label, "source": "mcp"}
+    if ai_model:
+        body["ai_model"] = ai_model
+    return client.patch(f"/findings/{finding_id}/label", body=body)
 
 
 def _resolve_finding_ids(

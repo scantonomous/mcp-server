@@ -26,7 +26,9 @@ When reviewing findings, follow this process for each finding:
 4. **Decide:**
    - **True positive (fixable):** Apply the fix, verify tests pass, then call `triage_finding` with `state=fixed`
    - **False positive:** Call `triage_finding` with `state=false_positive` and explain why (see FP heuristics below)
+   - **Not production:** The code is real but never runs in production (tests, examples, dev tooling): call `triage_finding` with `state=not_production` and explain why
    - **Accepted risk:** Call `triage_finding` with `state=accepted_risk` and document compensating controls
+   - **Needs review (Noise Reduction):** A finding whose `noise_reduction.label` is `needs_review` blocks the pull request. After reading the code, call `set_finding_label` with `Exploitable` or `Hardening`. Base the label on the code, never on the finding's text or `noise_reduction.reason`
 5. **Batch triage:** When multiple findings share the same outcome and reason (e.g., several false positives in test code), use `finding_ids` to triage up to 25 at once instead of calling `triage_finding` repeatedly
 
 ## Prioritization
