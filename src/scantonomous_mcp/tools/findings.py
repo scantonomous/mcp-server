@@ -14,6 +14,7 @@ def list_findings(
     query: str | None = None,
     scan_id: str | None = None,
     asset_id: str | None = None,
+    scanner_type: str | None = None,
     limit: int = 25,
     cursor: str | None = None,
     offset: int | None = None,
@@ -29,6 +30,8 @@ def list_findings(
     :param asset_id: Filter to findings for this asset/repository. Resolves
         the asset to its ``source_repository`` and queries OpenSearch
         directly. Ignored if ``scan_id`` is provided.
+    :param scanner_type: Filter by the kind of scan that produced the finding
+        (``standard``, ``ai`` or ``dast``). Both findings endpoints accept it.
     :param limit: Maximum number of results (default 25, API maximum 200).
     :param cursor: Opaque pagination cursor returned as ``next_cursor`` by a
         previous response. Use either ``cursor`` or ``offset``, not both.
@@ -56,6 +59,8 @@ def list_findings(
         params["state"] = "untriaged"
     if query:
         params["query"] = query
+    if scanner_type:
+        params["scanner_type"] = scanner_type
     if source_repository:
         params["source_repository"] = source_repository
 
