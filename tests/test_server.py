@@ -162,6 +162,28 @@ def test_set_finding_label_schema_and_description() -> None:
     assert "set_finding_label" in (server_instance.instructions or "")
 
 
+def test_ai_scan_findings_are_listed_read_and_triaged_like_any_finding(monkeypatch) -> None:
+    """SCA-523: AI scan findings live in the same findings store, so the tools
+    must not tell agents they are report-only, and list_findings filters by kind."""
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    tools = {tool.name: tool for tool in asyncio.run(_list_tools(server_instance))}
+    instructions = server_instance.instructions or ""
+
+    assert "report-only" not in instructions
+    assert "scanner_type=ai" in instructions
+    assert "get_ai_scan_report" not in (tools["get_finding"].description or "")
+    assert "not included" not in (tools["get_findings_summary"].description or "")
+    scanner_type = tools["list_findings"].inputSchema["properties"]["scanner_type"]
+    assert scanner_type["enum"] == ["standard", "ai", "dast"]
+
+    list_findings = MagicMock(return_value={"items": []})
+    monkeypatch.setattr(server.findings, "list_findings", list_findings)
+    result = asyncio.run(_call_tool(server_instance, "list_findings", {"scanner_type": "ai"}))
+
+    assert result.root.isError is False
+    assert list_findings.call_args.kwargs["scanner_type"] == "ai"
+
+
 def test_call_tool_rejects_label_outside_enum(monkeypatch) -> None:
     server_instance = server.create_server(client_id="client-123", stage="dev")
     set_label = MagicMock(return_value={})
@@ -403,6 +425,7 @@ def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch
                 "query": None,
                 "scan_id": None,
                 "asset_id": None,
+                "scanner_type": None,
                 "limit": 25,
                 "cursor": None,
                 "offset": None,

@@ -75,6 +75,19 @@ def test_list_findings_passes_filters_through_to_api() -> None:
     )
 
 
+def test_list_findings_passes_scanner_type_to_both_endpoints() -> None:
+    client = MagicMock()
+    client.get.return_value = {"items": []}
+
+    findings.list_findings(client, scanner_type="ai")
+    findings.list_findings(client, scan_id="scan-1", scanner_type="ai")
+
+    assert client.get.call_args_list[0].args == ("/findings",)
+    assert client.get.call_args_list[0].kwargs["params"]["scanner_type"] == "ai"
+    assert client.get.call_args_list[1].args == ("/scans/scan-1/findings",)
+    assert client.get.call_args_list[1].kwargs["params"]["scanner_type"] == "ai"
+
+
 def test_list_findings_resolves_source_repository_from_asset_id(
     monkeypatch,
 ) -> None:
