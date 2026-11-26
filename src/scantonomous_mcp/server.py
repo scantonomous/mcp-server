@@ -375,7 +375,8 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "Results span all scans for the repository — "
                     "you may see findings from older scans alongside recent ones; "
                     "use scan_id to scope to a specific scan run. "
-                    "Start with critical and high severity findings."
+                    "Start with critical and high severity findings. "
+                    "For a finding's code evidence, call get_finding."
                 ),
                 inputSchema={
                     "type": "object",
@@ -496,7 +497,11 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
                     "never runs in production, such as tests or examples; with explanation), "
                     "accepted_risk (with compensating controls), will_fix (with ecd date), or "
                     "duplicate. Use finding_ids to "
-                    "batch-triage up to 25 findings with the same state and reason in one call."
+                    "batch-triage up to 25 findings with the same state and reason in one call. "
+                    "Returns succeeded and failed counts with a status per finding, not the "
+                    "findings themselves; call get_finding to read one. If the update of a "
+                    "finding_id fails, the result is an api_error object with the status code "
+                    "instead; finding_ids reports each failure in its results."
                 ),
                 inputSchema={
                     "type": "object",
