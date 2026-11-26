@@ -36,8 +36,12 @@ def triage_finding(
         ``ecd_approved_until``, max 1 year).
     :param approval_reference: URL or reference to the approval document. Required
         when state is ``accepted_risk``. Max 2048 characters.
-    :returns: For single: the updated finding state. For batch: a summary with
-        succeeded/failed counts and per-finding results.
+    :returns: A summary with succeeded/failed counts and per-finding results, for one
+        finding as for several (SCA-545). It does not echo the findings it wrote;
+        ``get_finding`` reads one.
+    :raises ApiError: When the update of a ``finding_id`` fails, so the caller gets the
+        API's structured error. ``finding_ids``, at any length, reports each failure in
+        ``results`` instead.
     """
     ids = _resolve_finding_ids(finding_id, finding_ids)
 
@@ -55,15 +59,14 @@ def triage_finding(
     if approval_reference:
         body["approval_reference"] = approval_reference
 
-    if len(ids) == 1:
-        return client.patch(f"/findings/{ids[0]}/state", body=body)
-
     results: list[dict[str, Any]] = []
     for fid in ids:
         try:
             client.patch(f"/findings/{fid}/state", body=body)
             results.append({"finding_id": fid, "status": "success"})
         except ApiError as e:
+            if finding_ids is None:
+                raise
             results.append({"finding_id": fid, "status": "error", "error": str(e)})
 
     succeeded = sum(1 for r in results if r["status"] == "success")

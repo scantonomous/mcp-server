@@ -41,7 +41,7 @@ def test_resolve_finding_ids_rejects_invalid_inputs(
 
 def test_triage_finding_updates_single_finding() -> None:
     client = MagicMock()
-    client.patch.return_value = {"status": "ok"}
+    client.patch.return_value = {"finding_id": "finding-1", "state": "fixed", "description": "x"}
 
     result = triage.triage_finding(
         client,
@@ -60,7 +60,74 @@ def test_triage_finding_updates_single_finding() -> None:
             "ai_model": "GPT-5.4",
         },
     )
-    assert result == {"status": "ok"}
+    # SCA-545: one finding is acknowledged like a batch, not with the record it wrote.
+    assert result == {
+        "succeeded": 1,
+        "failed": 0,
+        "results": [{"finding_id": "finding-1", "status": "success"}],
+    }
+
+
+def test_triage_finding_single_list_element_is_acknowledged_like_a_batch() -> None:
+    client = MagicMock()
+    client.patch.return_value = {"finding_id": "finding-1", "state": "fixed", "description": "x"}
+
+    result = triage.triage_finding(
+        client,
+        state="fixed",
+        reason="Applied the patch",
+        ai_model="GPT-5.4",
+        finding_ids=["finding-1"],
+    )
+
+    assert result == {
+        "succeeded": 1,
+        "failed": 0,
+        "results": [{"finding_id": "finding-1", "status": "success"}],
+    }
+
+
+def test_triage_finding_one_element_batch_reports_its_failure() -> None:
+    """``finding_ids`` is batch input at any length: a failure lands in ``results``."""
+    client = MagicMock()
+    client.patch.side_effect = ApiError(404, "finding not found")
+
+    result = triage.triage_finding(
+        client,
+        state="fixed",
+        reason="Applied the patch",
+        ai_model="GPT-5.4",
+        finding_ids=["finding-1"],
+    )
+
+    assert result == {
+        "succeeded": 0,
+        "failed": 1,
+        "results": [
+            {
+                "finding_id": "finding-1",
+                "status": "error",
+                "error": "API error 404: finding not found",
+            }
+        ],
+    }
+
+
+def test_triage_finding_single_failure_still_raises() -> None:
+    """One finding keeps the structured API error (status code and details)."""
+    client = MagicMock()
+    client.patch.side_effect = ApiError(409, "conflict", payload={"message": "conflict"})
+
+    with pytest.raises(ApiError) as excinfo:
+        triage.triage_finding(
+            client,
+            state="fixed",
+            reason="Applied the patch",
+            ai_model="GPT-5.4",
+            finding_id="finding-1",
+        )
+
+    assert excinfo.value.status_code == 409
 
 
 def test_triage_finding_maps_accepted_risk_ecd_and_approval_reference() -> None:
