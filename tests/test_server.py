@@ -315,6 +315,40 @@ def test_call_tool_formats_api_errors(monkeypatch) -> None:
     assert "details" not in body  # no payload → no details key
 
 
+def test_triage_finding_single_failure_returns_the_structured_api_error(monkeypatch) -> None:
+    """SCA-545: one ``finding_id`` still surfaces the API's status code and details."""
+    api = MagicMock()
+    details = {"message": "finding was modified concurrently, retry"}
+    api.patch.side_effect = ApiError(409, details["message"], payload=details)
+    monkeypatch.setattr(server, "AuthManager", MagicMock())
+    monkeypatch.setattr(server, "ScantonomousClient", MagicMock(return_value=api))
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    asyncio.run(_list_tools(server_instance))
+
+    result = asyncio.run(
+        _call_tool(
+            server_instance,
+            "triage_finding",
+            {"finding_id": "f-1", "state": "fixed", "reason": "patched", "ai_model": "m"},
+        )
+    )
+
+    body = json.loads(result.root.content[0].text)
+    assert body["error"] == "api_error"
+    assert body["status_code"] == 409
+    assert body["details"] == details
+
+
+def test_triage_finding_description_states_what_it_returns() -> None:
+    """SCA-545: agents are told the tool does not echo findings, and both result shapes."""
+    server_instance = server.create_server(client_id="client-123", stage="dev")
+    tools = {t.name: t for t in asyncio.run(_list_tools(server_instance))}
+    description = tools["triage_finding"].description or ""
+
+    assert "get_finding" in description
+    assert "api_error" in description
+
+
 def test_call_tool_includes_payload_details_on_create_ai_scan_denial(monkeypatch) -> None:
     """SCA-280 review: when a create_ai_scan ApiError carries a
     structured payload (denied_asset_id, quota), the MCP tool response
