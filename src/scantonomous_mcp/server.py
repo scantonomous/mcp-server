@@ -637,15 +637,22 @@ def create_server(client_id: str, stage: str = "dev") -> Server:
             Tool(
                 name="get_findings_summary",
                 description=(
-                    "Get aggregate statistics for findings: severity breakdown, "
-                    "state counts, totals."
+                    "Get aggregate statistics for findings. Without scan_id: "
+                    "account-wide severity breakdown, state counts and totals. "
+                    "With scan_id: a scan-scoped summary with different fields "
+                    "(total, open, triaged, resolved, open_by_severity, and "
+                    "actionable / actionable_by_severity when available). The two "
+                    "shapes differ, so check which keys came back."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "scan_id": {
                             "type": "string",
-                            "description": "Optional scan ID to scope stats to a specific scan.",
+                            "description": (
+                                "Optional scan ID. Switches the response to the "
+                                "scan-scoped summary shape."
+                            ),
                         },
                     },
                 },

@@ -124,12 +124,21 @@ def get_findings_summary(
     client: ScantonomousClient,
     scan_id: str | None = None,
 ) -> dict[str, Any]:
-    """Get aggregate statistics for findings.
+    """Get aggregate findings statistics, account-wide or for one scan.
 
-    :param scan_id: Optional scan ID to scope stats to a specific scan.
-    :returns: Stats with severity and state breakdowns, total counts.
+    The two modes return DIFFERENT shapes:
+
+    * Without ``scan_id``: ``GET /findings/stats`` -- account-wide severity
+      and state breakdowns and totals.
+    * With ``scan_id``: ``GET /findings/summary`` -- a scan-scoped summary
+      with ``total``, ``open``, ``triaged``, ``resolved``,
+      ``open_by_severity`` and, for scans that report it, ``actionable`` and
+      ``actionable_by_severity``.
+
+    :param scan_id: Optional scan ID to scope the summary to one scan.
+    :returns: Account-wide stats, or the scan-scoped summary when ``scan_id``
+        is given. Do not assume the same keys in both cases.
     """
-    params: dict[str, Any] = {}
     if scan_id:
-        params["scan_id"] = scan_id
-    return client.get("/findings/stats", params=params)
+        return client.get("/findings/summary", params={"scan_id": scan_id})
+    return client.get("/findings/stats")
