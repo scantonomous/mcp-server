@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import ApiError, ScantonomousClient
+from .findings import check_finding_id
 
 MAX_BATCH_SIZE = 25
 #: Labels a person or agent may set (SCA-523); the API takes them capitalized.
@@ -29,8 +30,10 @@ def triage_finding(
         ``accepted_risk``, ``will_fix``, or ``duplicate``.
     :param reason: Explanation for the decision.
     :param ai_model: The AI model performing the triage (e.g. "Claude Opus 4.6").
-    :param finding_id: A single finding ID to triage.
-    :param finding_ids: A list of finding IDs to triage with the same state/reason.
+    :param finding_id: A single finding's ``finding_id`` field (``fnd_`` and 24 hex
+        characters) to triage.
+    :param finding_ids: A list of ``finding_id`` values to triage with the same
+        state/reason.
     :param ecd: Expected completion date (YYYY-MM-DD). Required when state is
         ``will_fix`` (within severity SLA) or ``accepted_risk`` (mapped to
         ``ecd_approved_until``, max 1 year).
@@ -42,6 +45,8 @@ def triage_finding(
     :raises ApiError: When the update of a ``finding_id`` fails, so the caller gets the
         API's structured error. ``finding_ids``, at any length, reports each failure in
         ``results`` instead.
+    :raises ValueError: If the ids are missing or malformed, or any is a scanner
+        observation id (``scntnms:finding:...``); nothing is written then.
     """
     ids = _resolve_finding_ids(finding_id, finding_ids)
 
@@ -85,15 +90,16 @@ def set_finding_label(
     The label overrides the Noise Reduction label and clears a Needs review
     block on the pull request.
 
-    :param finding_id: The finding to label.
+    :param finding_id: The finding's ``finding_id`` field, ``fnd_`` and 24 hex characters.
     :param label: ``Exploitable`` or ``Hardening``.
     :param ai_model: The AI model setting the label (e.g. "Claude Opus 4.7").
     :returns: The updated finding.
-    :raises ValueError: If ``finding_id`` is empty or ``label`` is not one of
-        :data:`FINDING_LABELS`.
+    :raises ValueError: If ``finding_id`` is empty or a scanner observation id, or
+        ``label`` is not one of :data:`FINDING_LABELS`.
     """
     if not finding_id:
         raise ValueError("finding_id is required.")
+    check_finding_id(finding_id)
     if label not in FINDING_LABELS:
         raise ValueError(f"label must be one of {', '.join(FINDING_LABELS)}.")
     body: dict[str, Any] = {"label": label, "source": "mcp"}
@@ -114,9 +120,11 @@ def _resolve_finding_ids(
             raise ValueError(f"finding_ids cannot exceed {MAX_BATCH_SIZE} items.")
         if len(finding_ids) == 0:
             raise ValueError("finding_ids must not be empty.")
+        for index, fid in enumerate(finding_ids):
+            check_finding_id(fid, field=f"finding_ids[{index}]")
         return finding_ids
     if finding_id:
-        return [finding_id]
+        return [check_finding_id(finding_id)]
     raise ValueError("Either finding_id or finding_ids is required.")
 
 

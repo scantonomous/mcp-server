@@ -6,6 +6,30 @@ from typing import Any
 
 from ..client import ScantonomousClient
 
+#: SCA-514: the prefix of the id a scanner mints for each detection. Finding detail
+#: responses used to carry it inside ``evidence``, where agents mistook it for the
+#: finding's id. No API accepts it.
+SCANNER_OBSERVATION_ID_PREFIX = "scntnms:finding:"
+
+
+def check_finding_id(finding_id: str, field: str = "finding_id") -> str:
+    """Refuse a scanner observation id before it reaches the API (SCA-514).
+
+    The API rejects one only for its length, which names neither id.
+
+    :param finding_id: The id an agent passed.
+    :param field: The argument it came in, named in the error.
+    :returns: ``finding_id``, unchanged.
+    :raises ValueError: If ``finding_id`` is a ``scntnms:finding:`` id.
+    """
+    if isinstance(finding_id, str) and finding_id.startswith(SCANNER_OBSERVATION_ID_PREFIX):
+        raise ValueError(
+            f"{field}: that is a scanner observation id from evidence, not a finding id; "
+            "use the finding_id field (fnd_ and 24 hex characters) that list_findings "
+            "and get_finding return."
+        )
+    return finding_id
+
 
 def list_findings(
     client: ScantonomousClient,
@@ -94,11 +118,13 @@ def get_finding(
 ) -> dict[str, Any]:
     """Get full finding details including code evidence.
 
-    :param finding_id: The finding ID.
+    :param finding_id: The finding's ``finding_id`` field, ``fnd_`` and 24 hex characters.
     :returns: Finding with title, description, severity, code evidence,
         file path, line numbers, and remediation guidance.
+    :raises ValueError: If ``finding_id`` is a scanner observation id
+        (``scntnms:finding:...``); see :func:`check_finding_id`.
     """
-    return client.get(f"/findings/{finding_id}")
+    return client.get(f"/findings/{check_finding_id(finding_id)}")
 
 
 def get_remediation(
@@ -107,8 +133,10 @@ def get_remediation(
 ) -> dict[str, Any]:
     """Get AI-generated remediation suggestion for a finding.
 
-    :param finding_id: The finding ID.
+    :param finding_id: The finding's ``finding_id`` field, ``fnd_`` and 24 hex characters.
     :returns: Remediation with suggested code fix, explanation, and
         confidence score.
+    :raises ValueError: If ``finding_id`` is a scanner observation id
+        (``scntnms:finding:...``); see :func:`check_finding_id`.
     """
-    return client.get(f"/findings/{finding_id}/remediation")
+    return client.get(f"/findings/{check_finding_id(finding_id)}/remediation")
