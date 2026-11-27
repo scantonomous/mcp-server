@@ -220,18 +220,36 @@ def test_get_findings_summary_without_scan_id() -> None:
 
     result = triage.get_findings_summary(client)
 
-    client.get.assert_called_once_with("/findings/stats", params={})
+    client.get.assert_called_once_with("/findings/stats")
     assert result == {"total": 1}
+
+
+def test_get_findings_summary_empty_scan_id_uses_account_wide_stats() -> None:
+    client = MagicMock()
+    client.get.return_value = {"total": 1}
+
+    triage.get_findings_summary(client, scan_id="")
+
+    client.get.assert_called_once_with("/findings/stats")
 
 
 def test_get_findings_summary_with_scan_id() -> None:
     client = MagicMock()
-    client.get.return_value = {"total": 1}
+    summary = {
+        "total": 3,
+        "open": 2,
+        "triaged": 1,
+        "resolved": 0,
+        "open_by_severity": {"high": 2},
+        "actionable": 1,
+        "actionable_by_severity": {"high": 1},
+    }
+    client.get.return_value = summary
 
     result = triage.get_findings_summary(client, scan_id="scan-1")
 
-    client.get.assert_called_once_with("/findings/stats", params={"scan_id": "scan-1"})
-    assert result == {"total": 1}
+    client.get.assert_called_once_with("/findings/summary", params={"scan_id": "scan-1"})
+    assert result == summary
 
 
 def test_set_finding_label_patches_label_with_mcp_source() -> None:
